@@ -61,9 +61,26 @@ public:
     m_cost = cost;
   }
 
+  // ZhangYu 2020-8-30,2018-1-30
+  uint64_t
+  getProbability() const
+  {
+	  return m_probability;
+  }
+  void
+  setProbability(double probability)
+  {
+	  m_probability=probability;
+  }
+
 private:
   Face* m_face; // pointer instead of reference so that NextHop is movable
   uint64_t m_cost = 0;
+  /** ZhangYu 2020-8-30 merge the code in fib-nexthop.cpp and fib-nexthop.hpp of 2018-1-30
+   *  ZhangYu 2018-1-30 add face occupied probability, in case of randomized rounding
+   *  use max() as default value, however maybe never be used.
+   */
+  uint64_t m_probability=std::numeric_limits<uint64_t>::max();
 };
 
 } // namespace fib

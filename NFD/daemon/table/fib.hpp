@@ -110,6 +110,13 @@ public: // mutation
   void
   addOrUpdateNextHop(Entry& entry, Face& face, uint64_t cost);
 
+  /** ZhangYu 2020-8-30, 新增加的代码，相比20180908版本
+   *
+   *  If a NextHop record for \p face already exists in \p entry, its cost is set to \p cost.
+   */
+  void
+  addOrUpdateNextHop(Entry& entry, Face& face, uint64_t cost, uint64_t probability);
+
   enum class RemoveNextHopResult {
     NO_SUCH_NEXTHOP, ///< the nexthop is not found
     NEXTHOP_REMOVED, ///< the nexthop is removed and the fib entry stays

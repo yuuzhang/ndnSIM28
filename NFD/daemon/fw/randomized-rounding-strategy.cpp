@@ -43,11 +43,11 @@ RandomizedRoundingStrategy::RandomizedRoundingStrategy(Forwarder& forwarder, con
 {
   ParsedInstanceName parsed = parseInstanceName(name);
   if (!parsed.parameters.empty()) {
-    NDN_THROW(std::invalid_argument("RandomStrategy does not accept parameters"));
+    NDN_THROW(std::invalid_argument("Randomized Rounding Strategy does not accept parameters"));
   }
   if (parsed.version && *parsed.version != getStrategyName()[-1].toVersion()) {
     NDN_THROW(std::invalid_argument(
-      "RandomStrategy does not support version " + to_string(*parsed.version)));
+      "Randomized Rounding Strategy does not support version " + to_string(*parsed.version)));
   }
   this->setInstanceName(makeInstanceName(name, getStrategyName()));
 }
@@ -55,7 +55,7 @@ RandomizedRoundingStrategy::RandomizedRoundingStrategy(Forwarder& forwarder, con
 const Name&
 RandomizedRoundingStrategy::getStrategyName()
 {
-  static Name strategyName("/localhost/nfd/strategy/random/%FD%01");
+  static Name strategyName("/localhost/nfd/strategy/randomized-rounding/%FD%01");
   return strategyName;
 }
 
@@ -79,9 +79,34 @@ RandomizedRoundingStrategy::afterReceiveInterest(const FaceEndpoint& ingress, co
     this->rejectPendingInterest(pitEntry);
     return;
   }
+  // ZhangYu 2020-8-30
+  boost::random::uniform_01<boost::random::mt19937&> dist(m_randomGenerator);
+  //dist.reset();
+  //std::cout << "ZhangYu 2018-3-25 randomValue: " << dist() << std::endl;
+  const uint64_t randomValue =std::round(dist() *1000000); //和 global-routing-help中的一样
+  //std::cout << "ZhangYu 2018-3-25 randomValue: " << randomValue << std::endl;
+  uint64_t probabilitySum=0;
+  fib::NextHopList::const_iterator selected;	//端口变量
+  uint64_t index=0;
+  for(selected=nhs.begin(); selected !=nhs.end(); ++selected) {
+	  index=index+1;
+	  probabilitySum+=selected->getProbability();
+	  //ZhangYu 2018-4-6这里是否加=应该影响不大，主要担心的是概率为0和1的记录，但都是小概率事件。
+	  if(randomValue<=probabilitySum){
+		  this->sendInterest(pitEntry, FaceEndpoint(selected->getFace(),0), interest);
+		  /*
+		  std::cout << "      ZhangYu 2018-2-1 afterReceiveInterest-- "
+				  << " face: " << FaceEndpoint(selected->getFace(),0)
+				  << " cost: " << selected->getCost()
+				  << " probability: " << selected->getProbability() << std::endl;
 
-  std::shuffle(nhs.begin(), nhs.end(), ndn::random::getRandomNumberEngine());
-  this->sendInterest(pitEntry, FaceEndpoint(nhs.front().getFace(), 0), interest);
+		  std::cout << "!!ZhangYu 2018-3-25, index:" << index << std::endl;
+		  */
+		  return;
+	  }
+  }
+  //std::shuffle(nhs.begin(), nhs.end(), ndn::random::getRandomNumberEngine());
+  //this->sendInterest(pitEntry, FaceEndpoint(nhs.front().getFace(), 0), interest);
 }
 
 void

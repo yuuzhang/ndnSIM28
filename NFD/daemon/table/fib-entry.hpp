@@ -92,6 +92,13 @@ private:
   std::pair<NextHopList::iterator, bool>
   addOrUpdateNextHop(Face& face, uint64_t cost);
 
+  /** \ZhangYu: adds a NextHop record
+   *  2020-8-30，original code has changed to addOrUpdateNextHop in ndnSIM28
+   *  2018-1-30, add the face occupied probability for randomized rounding
+   */
+  std::pair<NextHopList::iterator, bool>
+  addOrUpdateNextHop(Face& face, uint64_t cost, uint64_t probability);
+
   /** \brief removes a NextHop record
    *
    *  If no NextHop record for face exists, do nothing.

@@ -61,6 +61,12 @@ FibManager::addNextHop(const Name& topPrefix, const Interest& interest,
   const Name& prefix = parameters.getName();
   FaceId faceId = parameters.getFaceId();
   uint64_t cost = parameters.getCost();
+  // ZhangYu 2020-8-30,2018-2-1
+  uint64_t probability=std::numeric_limits<uint64_t>::max();
+  if(parameters.hasProbability()){
+	  probability=parameters.getProbability();
+	  //std::cout << "ZhangYu 2018-2-1 FibManager::addNexHop probability: " << probability << std::endl;
+  }
 
   if (prefix.size() > Fib::getMaxDepth()) {
     NFD_LOG_DEBUG("fib/add-nexthop(" << prefix << ',' << faceId << ',' << cost <<
@@ -77,7 +83,8 @@ FibManager::addNextHop(const Name& topPrefix, const Interest& interest,
   }
 
   fib::Entry* entry = m_fib.insert(prefix).first;
-  m_fib.addOrUpdateNextHop(*entry, *face, cost);
+  // ZhangYu
+  m_fib.addOrUpdateNextHop(*entry, *face, cost, probability);
 
   NFD_LOG_TRACE("fib/add-nexthop(" << prefix << ',' << faceId << ',' << cost << "): OK");
   return done(ControlResponse(200, "Success").setBody(parameters.wireEncode()));

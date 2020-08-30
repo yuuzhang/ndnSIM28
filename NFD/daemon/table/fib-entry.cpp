@@ -65,6 +65,24 @@ Entry::addOrUpdateNextHop(Face& face, uint64_t cost)
   return std::make_pair(it, isNew);
 }
 
+//ZhangYu 2020-8-30,2018-1-30
+std::pair<NextHopList::iterator, bool>
+Entry::addOrUpdateNextHop(Face& face, uint64_t cost, uint64_t probability)
+{
+  auto it = this->findNextHop(face);
+  bool isNew = false;
+  if (it == m_nextHops.end()) {
+	m_nextHops.emplace_back(face);
+	it = std::prev(m_nextHops.end());
+	isNew = true;
+	  }
+  it->setCost(cost);
+  it->setProbability(probability);
+  this->sortNextHops();
+
+  return std::make_pair(it, isNew);
+}
+
 bool
 Entry::removeNextHop(const Face& face)
 {

@@ -37,6 +37,7 @@ enum {
   Uri                 = 114,
   Origin              = 111,
   Cost                = 106,
+  Probability		  = 113, //ZhangYu 2020-8-30, 2018-1-31
   Capacity            = 131,
   Count               = 132,
   Flags               = 108,

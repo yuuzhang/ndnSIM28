@@ -124,6 +124,21 @@ public:
   static void
   CalculateAllPossibleRoutes();
 
+  /* ZhangYu 2020-8-30
+   * @ZY, 2017-8-19 try to caculate routes by python, and use the python results in ns3 c++
+   * add next hop for a route
+   * 原本打算用scenarioHelper来实现，结果发现它自成体系，拓扑和节点都用自己的，所以放弃
+   */
+  static void
+  addRouteHop(const std::string edgeStart,const std::string prefix, const std::string edgeEnd, std::int32_t metri);
+
+  /* ZhangYu 2020-8-30
+   * @ZY, 2018-1-30 add probability for the consumer node, in case of randomized rounding
+   */
+  static void
+  addRouteHop(const std::string edgeStart,const std::string prefix, const std::string edgeEnd, std::int32_t metri, std::double_t probability);
+
+
 private:
   void
   Install(Ptr<Channel> channel);

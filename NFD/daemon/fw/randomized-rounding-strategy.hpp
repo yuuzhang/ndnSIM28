@@ -30,14 +30,18 @@
 #include "strategy.hpp"
 #include "process-nack-traits.hpp"
 
+#include <boost/random.hpp>
+#include <boost/random/mersenne_twister.hpp>
+#include "face/face.hpp"
+#include "algorithm.hpp"
+
 namespace nfd {
 namespace fw {
 
-/** \brief Randomly chooses a nexthop
- *
+/** \ZhangYu 2020-8-30,使用路由表提供的端口转发概率进行随机转发，可以实现 traffic split。
+ * ndnSIM自带的多转发是多份副本，不是traffic split。
  * Sends an incoming interest to a random outgoing face,
  * excluding the incoming face.
- *
  */
 class RandomizedRoundingStrategy : public Strategy
                      , public ProcessNackTraits<RandomizedRoundingStrategy>
@@ -59,9 +63,12 @@ public:
 
 private:
   friend ProcessNackTraits<RandomizedRoundingStrategy>;
+
+protected:
+  boost::random::mt19937 m_randomGenerator;
 };
 
 } // namespace fw
 } // namespace nfd
 
-#endif // NFD_DAEMON_FW_RANDOMIZEDOUNDING_STRATEGY_HPP
+#endif // NFD_DAEMON_FW_RANDOMIZEDROUNDING_STRATEGY_HPP

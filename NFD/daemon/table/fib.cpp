@@ -143,6 +143,18 @@ Fib::addOrUpdateNextHop(Entry& entry, Face& face, uint64_t cost)
     this->afterNewNextHop(entry.getPrefix(), *it);
 }
 
+// ZhangYu 2020-8-30，ndnSIM28相比26新增加的部分
+void
+Fib::addOrUpdateNextHop(Entry& entry, Face& face, uint64_t cost, uint64_t probability)
+{
+  NextHopList::iterator it;
+  bool isNew;
+  std::tie(it, isNew) = entry.addOrUpdateNextHop(face, cost, probability);
+
+  if (isNew)
+    this->afterNewNextHop(entry.getPrefix(), *it);
+}
+
 Fib::RemoveNextHopResult
 Fib::removeNextHop(Entry& entry, const Face& face)
 {
