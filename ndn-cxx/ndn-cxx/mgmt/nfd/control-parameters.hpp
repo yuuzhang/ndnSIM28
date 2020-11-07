@@ -304,6 +304,7 @@ public: // getters & setters
   {
     m_wire.reset();
     m_probability = probability;
+    //std::cout << "--------ZhangYu 2020-11-6 control-parameters setProbability: " << probability << std::endl;
     m_hasFields[CONTROL_PARAMETER_PROBABILITY] = true;
     return *this;
   }
@@ -675,7 +676,7 @@ private: // fields
   std::string         m_localUri;
   RouteOrigin         m_origin;
   uint64_t            m_cost;
-  uint64_t			  m_probability; // ZhangYu 2020-8-30,2018-1-31
+  uint64_t			  m_probability=1000; // ZhangYu 2020-8-30,2018-1-31
   uint64_t            m_capacity;
   uint64_t            m_count;
   uint64_t            m_flags;

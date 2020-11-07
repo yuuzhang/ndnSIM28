@@ -1,0 +1,913 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title></title>
+<style type="text/css">
+.ansi2html-content { display: inline; white-space: pre-wrap; word-wrap: break-word; }
+.body_foreground { color: #AAAAAA; }
+.body_background { background-color: #000000; }
+.body_foreground > .bold,.bold > .body_foreground, body.body_foreground > pre > .bold { color: #FFFFFF; font-weight: normal; }
+.inv_foreground { color: #000000; }
+.inv_background { background-color: #AAAAAA; }
+.ansi1 { font-weight: bold; }
+.ansi31 { color: #aa0000; }
+.ansi32 { color: #00aa00; }
+.ansi36 { color: #00aaaa; }
+.ansi41 { background-color: #aa0000; }
+</style>
+</head>
+<body class="body_foreground body_background" style="font-size: normal;" >
+<pre class="ansi2html-content">
+ NFD/daemon/fw/randomized-rounding-strategy.cpp  |  35 <span class="ansi32">++++</span><span class="ansi31">-</span>
+ NFD/daemon/fw/randomized-rounding-strategy.hpp  |  15 <span class="ansi32">+</span><span class="ansi31">-</span>
+ NFD/daemon/mgmt/fib-manager.cpp                 |   9 <span class="ansi32">+</span><span class="ansi31">-</span>
+ NFD/daemon/table/fib-entry.cpp                  |  18 <span class="ansi32">+++</span>
+ NFD/daemon/table/fib-entry.hpp                  |   7 <span class="ansi32">+</span>
+ NFD/daemon/table/fib-nexthop.hpp                |  17 <span class="ansi32">++</span>
+ NFD/daemon/table/fib.cpp                        |  12 <span class="ansi32">++</span>
+ NFD/daemon/table/fib.hpp                        |   7 <span class="ansi32">+</span>
+ examples/ndn-zhangyu-multipath.cpp              | 197 <span class="ansi32">++++++++++++++++++++++++</span>
+ examples/topologies/topo-load-balancer2.txt     |  52 <span class="ansi32">+++++++</span>
+ helper/ndn-fib-helper.cpp                       |  72 <span class="ansi32">+++++++++</span>
+ helper/ndn-fib-helper.hpp                       |  40 <span class="ansi32">+++++</span>
+ helper/ndn-global-routing-helper.cpp            |  33 <span class="ansi32">++++</span>
+ helper/ndn-global-routing-helper.hpp            |  15 <span class="ansi32">++</span>
+ ndn-cxx/ndn-cxx/encoding/tlv-nfd.hpp            |   1 <span class="ansi32">+</span>
+ ndn-cxx/ndn-cxx/mgmt/nfd/control-command.cpp    |   8 <span class="ansi32">+</span><span class="ansi31">-</span>
+ ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.cpp |  20 <span class="ansi32">++</span><span class="ansi31">-</span>
+ ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.hpp |  34 <span class="ansi32">++++</span>
+ 18 files changed, 579 insertions(+), 13 deletions(-)
+
+<span class="ansi1">diff --git a/NFD/daemon/fw/randomized-rounding-strategy.cpp b/NFD/daemon/fw/randomized-rounding-strategy.cpp</span>
+<span class="ansi1">index c54767c..986ff53 100644</span>
+<span class="ansi1">--- a/NFD/daemon/fw/randomized-rounding-strategy.cpp</span>
+<span class="ansi1">+++ b/NFD/daemon/fw/randomized-rounding-strategy.cpp</span>
+<span class="ansi36">@@ -43,11 +43,11 @@</span> RandomizedRoundingStrategy::RandomizedRoundingStrategy(Forwarder&amp; forwarder, con
+ {
+   ParsedInstanceName parsed = parseInstanceName(name);
+   if (!parsed.parameters.empty()) {
+<span class="ansi31">-    NDN_THROW(std::invalid_argument("RandomStrategy does not accept parameters"));</span>
+<span class="ansi32">+</span><span class="ansi32">    NDN_THROW(std::invalid_argument("Randomized Rounding Strategy does not accept parameters"));</span>
+   }
+   if (parsed.version &amp;&amp; *parsed.version != getStrategyName()[-1].toVersion()) {
+     NDN_THROW(std::invalid_argument(
+<span class="ansi31">-      "RandomStrategy does not support version " + to_string(*parsed.version)));</span>
+<span class="ansi32">+</span><span class="ansi32">      "Randomized Rounding Strategy does not support version " + to_string(*parsed.version)));</span>
+   }
+   this-&gt;setInstanceName(makeInstanceName(name, getStrategyName()));
+ }
+<span class="ansi36">@@ -55,7 +55,7 @@</span> RandomizedRoundingStrategy::RandomizedRoundingStrategy(Forwarder&amp; forwarder, con
+ const Name&amp;
+ RandomizedRoundingStrategy::getStrategyName()
+ {
+<span class="ansi31">-  static Name strategyName("/localhost/nfd/strategy/random/%FD%01");</span>
+<span class="ansi32">+</span><span class="ansi32">  static Name strategyName("/localhost/nfd/strategy/randomized-rounding/%FD%01");</span>
+   return strategyName;
+ }
+ 
+<span class="ansi36">@@ -79,9 +79,34 @@</span> RandomizedRoundingStrategy::afterReceiveInterest(const FaceEndpoint&amp; ingress, co
+     this-&gt;rejectPendingInterest(pitEntry);
+     return;
+   }
+<span class="ansi32">+</span><span class="ansi32">  // ZhangYu 2020-8-30</span>
+<span class="ansi32">+</span><span class="ansi32">  boost::random::uniform_01&lt;boost::random::mt19937&amp;&gt; dist(m_randomGenerator);</span>
+<span class="ansi32">+</span><span class="ansi32">  //dist.reset();</span>
+<span class="ansi32">+</span><span class="ansi32">  //std::cout &lt;&lt; "ZhangYu 2018-3-25 randomValue: " &lt;&lt; dist() &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span><span class="ansi32">  const uint64_t randomValue =std::round(dist() *1000000); //和 global-routing-help中的一样</span>
+<span class="ansi32">+</span><span class="ansi32">  //std::cout &lt;&lt; "ZhangYu 2018-3-25 randomValue: " &lt;&lt; randomValue &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span><span class="ansi32">  uint64_t probabilitySum=0;</span>
+<span class="ansi32">+</span><span class="ansi32">  fib::NextHopList::const_iterator selected;	//端口变量</span>
+<span class="ansi32">+</span><span class="ansi32">  uint64_t index=0;</span>
+<span class="ansi32">+</span><span class="ansi32">  for(selected=nhs.begin(); selected !=nhs.end(); ++selected) {</span>
+<span class="ansi32">+</span>	<span class="ansi32">  index=index+1;</span>
+<span class="ansi32">+</span>	<span class="ansi32">  probabilitySum+=selected-&gt;getProbability();</span>
+<span class="ansi32">+</span>	<span class="ansi32">  //ZhangYu 2018-4-6这里是否加=应该影响不大，主要担心的是概率为0和1的记录，但都是小概率事件。</span>
+<span class="ansi32">+</span>	<span class="ansi32">  if(randomValue&lt;=probabilitySum){</span>
+<span class="ansi32">+</span>		<span class="ansi32">  this-&gt;sendInterest(pitEntry, FaceEndpoint(selected-&gt;getFace(),0), interest);</span>
+<span class="ansi32">+</span>		<span class="ansi32">  /*</span>
+<span class="ansi32">+</span>		<span class="ansi32">  std::cout &lt;&lt; "      ZhangYu 2018-2-1 afterReceiveInterest-- "</span>
+<span class="ansi32">+</span>				<span class="ansi32">  &lt;&lt; " face: " &lt;&lt; FaceEndpoint(selected-&gt;getFace(),0)</span>
+<span class="ansi32">+</span>				<span class="ansi32">  &lt;&lt; " cost: " &lt;&lt; selected-&gt;getCost()</span>
+<span class="ansi32">+</span>				<span class="ansi32">  &lt;&lt; " probability: " &lt;&lt; selected-&gt;getProbability() &lt;&lt; std::endl;</span>
+ 
+<span class="ansi31">-  std::shuffle(nhs.begin(), nhs.end(), ndn::random::getRandomNumberEngine());</span>
+<span class="ansi31">-  this-&gt;sendInterest(pitEntry, FaceEndpoint(nhs.front().getFace(), 0), interest);</span>
+<span class="ansi32">+</span>		<span class="ansi32">  std::cout &lt;&lt; "!!ZhangYu 2018-3-25, index:" &lt;&lt; index &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span>		<span class="ansi32">  */</span>
+<span class="ansi32">+</span>		<span class="ansi32">  return;</span>
+<span class="ansi32">+</span>	<span class="ansi32">  }</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+<span class="ansi32">+</span><span class="ansi32">  //std::shuffle(nhs.begin(), nhs.end(), ndn::random::getRandomNumberEngine());</span>
+<span class="ansi32">+</span><span class="ansi32">  //this-&gt;sendInterest(pitEntry, FaceEndpoint(nhs.front().getFace(), 0), interest);</span>
+ }
+ 
+ void
+<span class="ansi1">diff --git a/NFD/daemon/fw/randomized-rounding-strategy.hpp b/NFD/daemon/fw/randomized-rounding-strategy.hpp</span>
+<span class="ansi1">index 1ee17fd..e5b65d4 100644</span>
+<span class="ansi1">--- a/NFD/daemon/fw/randomized-rounding-strategy.hpp</span>
+<span class="ansi1">+++ b/NFD/daemon/fw/randomized-rounding-strategy.hpp</span>
+<span class="ansi36">@@ -30,14 +30,18 @@</span>
+ #include "strategy.hpp"
+ #include "process-nack-traits.hpp"
+ 
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/random.hpp&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/random/mersenne_twister.hpp&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">#include "face/face.hpp"</span>
+<span class="ansi32">+</span><span class="ansi32">#include "algorithm.hpp"</span>
+<span class="ansi32">+</span>
+ namespace nfd {
+ namespace fw {
+ 
+<span class="ansi31">-/** \brief Randomly chooses a nexthop</span>
+<span class="ansi31">- *</span>
+<span class="ansi32">+</span><span class="ansi32">/** \ZhangYu 2020-8-30,使用路由表提供的端口转发概率进行随机转发，可以实现 traffic split。</span>
+<span class="ansi32">+</span><span class="ansi32"> * ndnSIM自带的多转发是多份副本，不是traffic split。</span>
+  * Sends an incoming interest to a random outgoing face,
+  * excluding the incoming face.
+<span class="ansi31">- *</span>
+  */
+ class RandomizedRoundingStrategy : public Strategy
+                      , public ProcessNackTraits&lt;RandomizedRoundingStrategy&gt;
+<span class="ansi36">@@ -59,9 +63,12 @@</span> public:
+ 
+ private:
+   friend ProcessNackTraits&lt;RandomizedRoundingStrategy&gt;;
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">protected:</span>
+<span class="ansi32">+</span><span class="ansi32">  boost::random::mt19937 m_randomGenerator;</span>
+ };
+ 
+ } // namespace fw
+ } // namespace nfd
+ 
+<span class="ansi31">-#endif // NFD_DAEMON_FW_RANDOMIZEDOUNDING_STRATEGY_HPP</span>
+<span class="ansi32">+</span><span class="ansi32">#endif // NFD_DAEMON_FW_RANDOMIZEDROUNDING_STRATEGY_HPP</span>
+<span class="ansi1">diff --git a/NFD/daemon/mgmt/fib-manager.cpp b/NFD/daemon/mgmt/fib-manager.cpp</span>
+<span class="ansi1">index c048da5..98df452 100644</span>
+<span class="ansi1">--- a/NFD/daemon/mgmt/fib-manager.cpp</span>
+<span class="ansi1">+++ b/NFD/daemon/mgmt/fib-manager.cpp</span>
+<span class="ansi36">@@ -61,6 +61,12 @@</span> FibManager::addNextHop(const Name&amp; topPrefix, const Interest&amp; interest,
+   const Name&amp; prefix = parameters.getName();
+   FaceId faceId = parameters.getFaceId();
+   uint64_t cost = parameters.getCost();
+<span class="ansi32">+</span><span class="ansi32">  // ZhangYu 2020-8-30,2018-2-1</span>
+<span class="ansi32">+</span><span class="ansi32">  uint64_t probability=std::numeric_limits&lt;uint64_t&gt;::max();</span>
+<span class="ansi32">+</span><span class="ansi32">  if(parameters.hasProbability()){</span>
+<span class="ansi32">+</span>	<span class="ansi32">  probability=parameters.getProbability();</span>
+<span class="ansi32">+</span>	<span class="ansi32">  //std::cout &lt;&lt; "ZhangYu 2018-2-1 FibManager::addNexHop probability: " &lt;&lt; probability &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+ 
+   if (prefix.size() &gt; Fib::getMaxDepth()) {
+     NFD_LOG_DEBUG("fib/add-nexthop(" &lt;&lt; prefix &lt;&lt; ',' &lt;&lt; faceId &lt;&lt; ',' &lt;&lt; cost &lt;&lt;
+<span class="ansi36">@@ -77,7 +83,8 @@</span> FibManager::addNextHop(const Name&amp; topPrefix, const Interest&amp; interest,
+   }
+ 
+   fib::Entry* entry = m_fib.insert(prefix).first;
+<span class="ansi31">-  m_fib.addOrUpdateNextHop(*entry, *face, cost);</span>
+<span class="ansi32">+</span><span class="ansi32">  // ZhangYu</span>
+<span class="ansi32">+</span><span class="ansi32">  m_fib.addOrUpdateNextHop(*entry, *face, cost, probability);</span>
+ 
+   NFD_LOG_TRACE("fib/add-nexthop(" &lt;&lt; prefix &lt;&lt; ',' &lt;&lt; faceId &lt;&lt; ',' &lt;&lt; cost &lt;&lt; "): OK");
+   return done(ControlResponse(200, "Success").setBody(parameters.wireEncode()));
+<span class="ansi1">diff --git a/NFD/daemon/table/fib-entry.cpp b/NFD/daemon/table/fib-entry.cpp</span>
+<span class="ansi1">index ade4c9f..fb5610d 100644</span>
+<span class="ansi1">--- a/NFD/daemon/table/fib-entry.cpp</span>
+<span class="ansi1">+++ b/NFD/daemon/table/fib-entry.cpp</span>
+<span class="ansi36">@@ -65,6 +65,24 @@</span> Entry::addOrUpdateNextHop(Face&amp; face, uint64_t cost)
+   return std::make_pair(it, isNew);
+ }
+ 
+<span class="ansi32">+</span><span class="ansi32">//ZhangYu 2020-8-30,2018-1-30</span>
+<span class="ansi32">+</span><span class="ansi32">std::pair&lt;NextHopList::iterator, bool&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">Entry::addOrUpdateNextHop(Face&amp; face, uint64_t cost, uint64_t probability)</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span><span class="ansi32">  auto it = this-&gt;findNextHop(face);</span>
+<span class="ansi32">+</span><span class="ansi32">  bool isNew = false;</span>
+<span class="ansi32">+</span><span class="ansi32">  if (it == m_nextHops.end()) {</span>
+<span class="ansi32">+</span>	<span class="ansi32">m_nextHops.emplace_back(face);</span>
+<span class="ansi32">+</span>	<span class="ansi32">it = std::prev(m_nextHops.end());</span>
+<span class="ansi32">+</span>	<span class="ansi32">isNew = true;</span>
+<span class="ansi32">+</span>	<span class="ansi32">  }</span>
+<span class="ansi32">+</span><span class="ansi32">  it-&gt;setCost(cost);</span>
+<span class="ansi32">+</span><span class="ansi32">  it-&gt;setProbability(probability);</span>
+<span class="ansi32">+</span><span class="ansi32">  this-&gt;sortNextHops();</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  return std::make_pair(it, isNew);</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span>
+ bool
+ Entry::removeNextHop(const Face&amp; face)
+ {
+<span class="ansi1">diff --git a/NFD/daemon/table/fib-entry.hpp b/NFD/daemon/table/fib-entry.hpp</span>
+<span class="ansi1">index 7460eda..bb564ab 100644</span>
+<span class="ansi1">--- a/NFD/daemon/table/fib-entry.hpp</span>
+<span class="ansi1">+++ b/NFD/daemon/table/fib-entry.hpp</span>
+<span class="ansi36">@@ -92,6 +92,13 @@</span> private:
+   std::pair&lt;NextHopList::iterator, bool&gt;
+   addOrUpdateNextHop(Face&amp; face, uint64_t cost);
+ 
+<span class="ansi32">+</span><span class="ansi32">  /** \ZhangYu: adds a NextHop record</span>
+<span class="ansi32">+</span><span class="ansi32">   *  2020-8-30，original code has changed to addOrUpdateNextHop in ndnSIM28</span>
+<span class="ansi32">+</span><span class="ansi32">   *  2018-1-30, add the face occupied probability for randomized rounding</span>
+<span class="ansi32">+</span><span class="ansi32">   */</span>
+<span class="ansi32">+</span><span class="ansi32">  std::pair&lt;NextHopList::iterator, bool&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">  addOrUpdateNextHop(Face&amp; face, uint64_t cost, uint64_t probability);</span>
+<span class="ansi32">+</span>
+   /** \brief removes a NextHop record
+    *
+    *  If no NextHop record for face exists, do nothing.
+<span class="ansi1">diff --git a/NFD/daemon/table/fib-nexthop.hpp b/NFD/daemon/table/fib-nexthop.hpp</span>
+<span class="ansi1">index e03efda..df3c1bd 100644</span>
+<span class="ansi1">--- a/NFD/daemon/table/fib-nexthop.hpp</span>
+<span class="ansi1">+++ b/NFD/daemon/table/fib-nexthop.hpp</span>
+<span class="ansi36">@@ -61,9 +61,26 @@</span> public:
+     m_cost = cost;
+   }
+ 
+<span class="ansi32">+</span><span class="ansi32">  // ZhangYu 2020-8-30,2018-1-30</span>
+<span class="ansi32">+</span><span class="ansi32">  uint64_t</span>
+<span class="ansi32">+</span><span class="ansi32">  getProbability() const</span>
+<span class="ansi32">+</span><span class="ansi32">  {</span>
+<span class="ansi32">+</span>	<span class="ansi32">  return m_probability;</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+<span class="ansi32">+</span><span class="ansi32">  void</span>
+<span class="ansi32">+</span><span class="ansi32">  setProbability(double probability)</span>
+<span class="ansi32">+</span><span class="ansi32">  {</span>
+<span class="ansi32">+</span>	<span class="ansi32">  m_probability=probability;</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+<span class="ansi32">+</span>
+ private:
+   Face* m_face; // pointer instead of reference so that NextHop is movable
+   uint64_t m_cost = 0;
+<span class="ansi32">+</span><span class="ansi32">  /** ZhangYu 2020-8-30 merge the code in fib-nexthop.cpp and fib-nexthop.hpp of 2018-1-30</span>
+<span class="ansi32">+</span><span class="ansi32">   *  ZhangYu 2018-1-30 add face occupied probability, in case of randomized rounding</span>
+<span class="ansi32">+</span><span class="ansi32">   *  use max() as default value, however maybe never be used.</span>
+<span class="ansi32">+</span><span class="ansi32">   */</span>
+<span class="ansi32">+</span><span class="ansi32">  uint64_t m_probability=std::numeric_limits&lt;uint64_t&gt;::max();</span>
+ };
+ 
+ } // namespace fib
+<span class="ansi1">diff --git a/NFD/daemon/table/fib.cpp b/NFD/daemon/table/fib.cpp</span>
+<span class="ansi1">index 99892e6..77b772c 100644</span>
+<span class="ansi1">--- a/NFD/daemon/table/fib.cpp</span>
+<span class="ansi1">+++ b/NFD/daemon/table/fib.cpp</span>
+<span class="ansi36">@@ -143,6 +143,18 @@</span> Fib::addOrUpdateNextHop(Entry&amp; entry, Face&amp; face, uint64_t cost)
+     this-&gt;afterNewNextHop(entry.getPrefix(), *it);
+ }
+ 
+<span class="ansi32">+</span><span class="ansi32">// ZhangYu 2020-8-30，ndnSIM28相比26新增加的部分</span>
+<span class="ansi32">+</span><span class="ansi32">void</span>
+<span class="ansi32">+</span><span class="ansi32">Fib::addOrUpdateNextHop(Entry&amp; entry, Face&amp; face, uint64_t cost, uint64_t probability)</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span><span class="ansi32">  NextHopList::iterator it;</span>
+<span class="ansi32">+</span><span class="ansi32">  bool isNew;</span>
+<span class="ansi32">+</span><span class="ansi32">  std::tie(it, isNew) = entry.addOrUpdateNextHop(face, cost, probability);</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  if (isNew)</span>
+<span class="ansi32">+</span><span class="ansi32">    this-&gt;afterNewNextHop(entry.getPrefix(), *it);</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span>
+ Fib::RemoveNextHopResult
+ Fib::removeNextHop(Entry&amp; entry, const Face&amp; face)
+ {
+<span class="ansi1">diff --git a/NFD/daemon/table/fib.hpp b/NFD/daemon/table/fib.hpp</span>
+<span class="ansi1">index f5984aa..c7cbd1e 100644</span>
+<span class="ansi1">--- a/NFD/daemon/table/fib.hpp</span>
+<span class="ansi1">+++ b/NFD/daemon/table/fib.hpp</span>
+<span class="ansi36">@@ -110,6 +110,13 @@</span> public: // mutation
+   void
+   addOrUpdateNextHop(Entry&amp; entry, Face&amp; face, uint64_t cost);
+ 
+<span class="ansi32">+</span><span class="ansi32">  /** ZhangYu 2020-8-30, 新增加的代码，相比20180908版本</span>
+<span class="ansi32">+</span><span class="ansi32">   *</span>
+<span class="ansi32">+</span><span class="ansi32">   *  If a NextHop record for \p face already exists in \p entry, its cost is set to \p cost.</span>
+<span class="ansi32">+</span><span class="ansi32">   */</span>
+<span class="ansi32">+</span><span class="ansi32">  void</span>
+<span class="ansi32">+</span><span class="ansi32">  addOrUpdateNextHop(Entry&amp; entry, Face&amp; face, uint64_t cost, uint64_t probability);</span>
+<span class="ansi32">+</span>
+   enum class RemoveNextHopResult {
+     NO_SUCH_NEXTHOP, ///&lt; the nexthop is not found
+     NEXTHOP_REMOVED, ///&lt; the nexthop is removed and the fib entry stays
+<span class="ansi1">diff --git a/examples/ndn-zhangyu-multipath.cpp b/examples/ndn-zhangyu-multipath.cpp</span>
+<span class="ansi1">new file mode 100755</span>
+<span class="ansi1">index 0000000..d3147cf</span>
+<span class="ansi1">--- /dev/null</span>
+<span class="ansi1">+++ b/examples/ndn-zhangyu-multipath.cpp</span>
+<span class="ansi36">@@ -0,0 +1,197 @@</span>
+<span class="ansi32">+</span><span class="ansi32">/* -*-  Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */</span>
+<span class="ansi32">+</span><span class="ansi32">/*</span>
+<span class="ansi32">+</span><span class="ansi32"> * Copyright (c) 2011-2012 University of California, Los Angeles</span>
+<span class="ansi32">+</span><span class="ansi32"> *</span>
+<span class="ansi32">+</span><span class="ansi32"> * This program is free software; you can redistribute it and/or modify</span>
+<span class="ansi32">+</span><span class="ansi32"> * it under the terms of the GNU General Public License version 2 as</span>
+<span class="ansi32">+</span><span class="ansi32"> * published by the Free Software Foundation;</span>
+<span class="ansi32">+</span><span class="ansi32"> *</span>
+<span class="ansi32">+</span><span class="ansi32"> * This program is distributed in the hope that it will be useful,</span>
+<span class="ansi32">+</span><span class="ansi32"> * but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="ansi32">+</span><span class="ansi32"> * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="ansi32">+</span><span class="ansi32"> * GNU General Public License for more details.</span>
+<span class="ansi32">+</span><span class="ansi32"> *</span>
+<span class="ansi32">+</span><span class="ansi32"> * You should have received a copy of the GNU General Public License</span>
+<span class="ansi32">+</span><span class="ansi32"> * along with this program; if not, write to the Free Software</span>
+<span class="ansi32">+</span><span class="ansi32"> * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA</span>
+<span class="ansi32">+</span><span class="ansi32"> *</span>
+<span class="ansi32">+</span><span class="ansi32"> * Author: Alexander Afanasyev &lt;alexander.afanasyev@ucla.edu&gt;</span>
+<span class="ansi32">+</span><span class="ansi32"> */</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/core-module.h"</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/network-module.h"</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/point-to-point-module.h"</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/point-to-point-layout-module.h"</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/ndnSIM-module.h"</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">//2016-12-7</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/lexical_cast.hpp&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/lambda/lambda.hpp&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/lambda/bind.hpp&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/ndnSIM/helper/ndn-link-control-helper.hpp"</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">//ZhangYu 2014-2-7 for DynamicRouting，否则不认识Name，试了很多.h才知道要包含ndn-interest.h</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/names.h"</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/string.h"</span>
+<span class="ansi32">+</span><span class="ansi32">#include "ns3/ptr.h"</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/ref.hpp&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/lexical_cast.hpp&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/lambda/lambda.hpp&gt;</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;boost/lambda/bind.hpp&gt;</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">using namespace std;</span>
+<span class="ansi32">+</span><span class="ansi32">//2017-8-19 try python caculate routes and add to FIB manually</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">//---ZhangYu</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">namespace ns3	{</span>
+<span class="ansi32">+</span><span class="ansi32">/**</span>
+<span class="ansi32">+</span><span class="ansi32"> * ZhangYu 2014-3-10，使用BRITE产生的随机网络拓扑，业务量均匀分布在随机的节点对之间</span>
+<span class="ansi32">+</span><span class="ansi32"> * 我们这里可以偷懒，因为节点的位置和链路是随机的，所以可以让节点对编号是连续的，效果上应该和均匀分布的随机是一样的。</span>
+<span class="ansi32">+</span><span class="ansi32"> * 而且这样拓扑和业务分布可以是固定的，分析数据结果时，可比性强。</span>
+<span class="ansi32">+</span><span class="ansi32"> */</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">int</span>
+<span class="ansi32">+</span><span class="ansi32">main (int argc, char *argv[])</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span>	<span class="ansi32">bool manualAssign=true;</span>
+<span class="ansi32">+</span>	<span class="ansi32">int InterestsPerSec=200;</span>
+<span class="ansi32">+</span>	<span class="ansi32">int simulationSpan=5;</span>
+<span class="ansi32">+</span>	<span class="ansi32">int TraceSpan=1;</span>
+<span class="ansi32">+</span>	<span class="ansi32">int recordsNumber=100;</span>
+<span class="ansi32">+</span>	<span class="ansi32">string routingName="debug";</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">//----------------命令行参数----------------</span>
+<span class="ansi32">+</span>	<span class="ansi32">CommandLine cmd;</span>
+<span class="ansi32">+</span>	<span class="ansi32">cmd.AddValue("InterestsPerSec","Interests emit by consumer per second",InterestsPerSec);</span>
+<span class="ansi32">+</span>	<span class="ansi32">cmd.AddValue("simulationSpan","Simulation span time by seconds",simulationSpan);</span>
+<span class="ansi32">+</span>	<span class="ansi32">cmd.AddValue ("routingName", "could be Flooding, BestRoute, k-shortest, MultiPathPairFirst, debug", routingName);</span>
+<span class="ansi32">+</span>	<span class="ansi32">cmd.AddValue ("recordsNumber", "total number of records in tracer file", recordsNumber);</span>
+<span class="ansi32">+</span>	<span class="ansi32">cmd.Parse(argc,argv);</span>
+<span class="ansi32">+</span>	<span class="ansi32">//std::cout &lt;&lt; "routingName: " &lt;&lt; routingName &lt;&lt; "   " &lt;&lt; InterestsPerSec &lt;&lt; " " &lt;&lt; simulationSpan &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">//----------------仿真拓扑----------------</span>
+<span class="ansi32">+</span>	<span class="ansi32">AnnotatedTopologyReader topologyReader ("", 20);</span>
+<span class="ansi32">+</span>	<span class="ansi32">//topologyReader.SetFileName ("src/ndnSIM/examples/topologies/26node-result.txt");</span>
+<span class="ansi32">+</span>	<span class="ansi32">topologyReader.SetFileName ("src/ndnSIM/examples/topologies/topo-for-CompareMultiPath.txt");</span>
+<span class="ansi32">+</span>	<span class="ansi32">topologyReader.Read ();</span>
+<span class="ansi32">+</span>	<span class="ansi32">int nodesNumber=topologyReader.GetNodes().size();</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">//----------------安装Install CCNx stack ----------------</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndn::StackHelper ndnHelper;</span>
+<span class="ansi32">+</span>	<span class="ansi32">// 下面这一句是Install NDN stack on all nodes</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndnHelper.setPolicy("nfd::cs::lru");</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndnHelper.setCsSize(1);</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndnHelper.InstallAll();</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">topologyReader.ApplyOspfMetric();  //使得链路metric生效</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">//----------------Installing global routing interface on all nodes ----------------</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndn::GlobalRoutingHelper ndnGlobalRoutingHelper;</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndnGlobalRoutingHelper.InstallAll ();</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">//----------------设置节点的业务 ----------------</span>
+<span class="ansi32">+</span>	<span class="ansi32">//根据不同的拓扑手工指定或者自动生成业务节点对</span>
+<span class="ansi32">+</span>	<span class="ansi32">std::vector&lt;int&gt; consumerNodes,producerNodes;</span>
+<span class="ansi32">+</span>	<span class="ansi32">//生成consumer和producer的节点号动态数组</span>
+<span class="ansi32">+</span>	<span class="ansi32">if(manualAssign)	{</span>
+<span class="ansi32">+</span>		<span class="ansi32">int tmpConsumer[]={0};</span>
+<span class="ansi32">+</span>		<span class="ansi32">int tmpProducer[]={2};</span>
+<span class="ansi32">+</span>		<span class="ansi32">consumerNodes.assign(tmpConsumer,tmpConsumer+sizeof(tmpConsumer)/sizeof(int));</span>
+<span class="ansi32">+</span>		<span class="ansi32">producerNodes.assign(tmpProducer,tmpProducer+sizeof(tmpConsumer)/sizeof(int));</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>	<span class="ansi32">else	{</span>
+<span class="ansi32">+</span>		<span class="ansi32">for(int i=0;i&lt;nodesNumber/2;i++)	{</span>
+<span class="ansi32">+</span>		<span class="ansi32">  consumerNodes.push_back(i);</span>
+<span class="ansi32">+</span>		<span class="ansi32">  producerNodes.push_back(i+nodesNumber/2);</span>
+<span class="ansi32">+</span>		<span class="ansi32">}</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">//根据上面生成的节点对编号装载应用</span>
+<span class="ansi32">+</span>	<span class="ansi32">for(uint32_t i=0;i&lt;consumerNodes.size();i++)	{</span>
+<span class="ansi32">+</span>		<span class="ansi32">ndn::AppHelper consumerHelper ("ns3::ndn::ConsumerCbr");</span>
+<span class="ansi32">+</span>		<span class="ansi32">consumerHelper.SetAttribute("Frequency", StringValue (boost::lexical_cast&lt;std::string&gt;(InterestsPerSec)));        // 100 interests a second</span>
+<span class="ansi32">+</span>		<span class="ansi32">//ndn::AppHelper consumerHelper("ns3::ndn::ConsumerZipfMandelbrot");</span>
+<span class="ansi32">+</span>		<span class="ansi32">//consumerHelper.SetAttribute("NumberOfContents", StringValue("100")); // 10 different contents</span>
+<span class="ansi32">+</span>		<span class="ansi32">//可以选择的有：</span>
+<span class="ansi32">+</span>		<span class="ansi32">//"none": no randomization</span>
+<span class="ansi32">+</span>		<span class="ansi32">//"uniform": uniform distribution in range (0, 1/Frequency)</span>
+<span class="ansi32">+</span>		<span class="ansi32">//"exponential": exponential distribution with mean 1/Frequency</span>
+<span class="ansi32">+</span>		<span class="ansi32">consumerHelper.SetAttribute("Randomize", StringValue("exponential"));</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>		<span class="ansi32">Ptr&lt;Node&gt; consumer1 = Names::Find&lt;Node&gt; ("Node"+boost::lexical_cast&lt;std::string&gt; (consumerNodes[i]));</span>
+<span class="ansi32">+</span>		<span class="ansi32">consumerHelper.SetPrefix ("/Node"+boost::lexical_cast&lt;std::string&gt;(consumerNodes[i]));</span>
+<span class="ansi32">+</span>		<span class="ansi32">ApplicationContainer app=consumerHelper.Install(consumer1);</span>
+<span class="ansi32">+</span>		<span class="ansi32">app.Start(Seconds(0.01*i));</span>
+<span class="ansi32">+</span>		<span class="ansi32">// Choosing forwarding strategy</span>
+<span class="ansi32">+</span>		<span class="ansi32">ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast&lt;std::string&gt; (consumerNodes[i]), "/localhost/nfd/strategy/randomized-rounding");</span>
+<span class="ansi32">+</span>		<span class="ansi32">//ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast&lt;std::string&gt; (consumerNodes[i]), "/localhost/nfd/strategy/best-route");</span>
+<span class="ansi32">+</span>		<span class="ansi32">//ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast&lt;std::string&gt; (consumerNodes[i]), "/localhost/nfd/strategy/ncc");</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>		<span class="ansi32">std::cout &lt;&lt;"ZhangYu  consumer1-&gt;GetId(): " &lt;&lt;consumer1-&gt;GetId() &lt;&lt; "  prefix: /Node"+boost::lexical_cast&lt;std::string&gt;(consumerNodes[i]) &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">for(uint32_t i=0;i&lt;producerNodes.size();i++)	{</span>
+<span class="ansi32">+</span>		<span class="ansi32">ndn::AppHelper producerHelper ("ns3::ndn::Producer");</span>
+<span class="ansi32">+</span>		<span class="ansi32">producerHelper.SetAttribute ("PayloadSize", StringValue("1024"));</span>
+<span class="ansi32">+</span>		<span class="ansi32">//认为producer节点的Prefix和对应位置的consumer节点一致</span>
+<span class="ansi32">+</span>		<span class="ansi32">producerHelper.SetPrefix ("/Node"+boost::lexical_cast&lt;std::string&gt;(consumerNodes[i]));</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>		<span class="ansi32">Ptr&lt;Node&gt; producer1 = Names::Find&lt;Node&gt; ("Node"+boost::lexical_cast&lt;std::string&gt; (producerNodes[i]));</span>
+<span class="ansi32">+</span>		<span class="ansi32">ndnGlobalRoutingHelper.AddOrigins ("/Node"+boost::lexical_cast&lt;std::string&gt;(consumerNodes[i]), producer1);</span>
+<span class="ansi32">+</span>		<span class="ansi32">producerHelper.Install(producer1);</span>
+<span class="ansi32">+</span>		<span class="ansi32">std::cout &lt;&lt;"ZhangYu producer1-&gt;GetId(): " &lt;&lt;producer1-&gt;GetId() &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">// Calculate and install FIBs</span>
+<span class="ansi32">+</span>	<span class="ansi32">if(routingName.compare("BestRoute")==0){</span>
+<span class="ansi32">+</span>	<span class="ansi32">  ndn::GlobalRoutingHelper::CalculateRoutes ();</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>	<span class="ansi32">else if(routingName.compare("debug")==0){</span>
+<span class="ansi32">+</span>		<span class="ansi32">//当Consumer是0时，prefix=/Node0时，需要添加 0--&gt;1--&gt;4 的路由才可以，添加反向4-&gt;1-&gt;0没有Traffic</span>
+<span class="ansi32">+</span>		<span class="ansi32">ndn::GlobalRoutingHelper::addRouteHop("Node0","/Node0","Node2",1,0.9);</span>
+<span class="ansi32">+</span>		<span class="ansi32">ndn::GlobalRoutingHelper::addRouteHop("Node0","/Node0","Node3",1,0.1);</span>
+<span class="ansi32">+</span>		<span class="ansi32">ndn::GlobalRoutingHelper::addRouteHop("Node3","/Node0","Node2",1,1.0);</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>	<span class="ansi32">else if(routingName.compare("Flooding")==0){</span>
+<span class="ansi32">+</span>		<span class="ansi32">ndn::GlobalRoutingHelper::CalculateAllPossibleRoutes();</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>	<span class="ansi32">else{</span>
+<span class="ansi32">+</span>		<span class="ansi32">std::cout &lt;&lt; "!!!!  ~~~~~~Unkown routingName: " &lt;&lt; routingName &lt;&lt; ", try again..." &lt;&lt;std::endl;</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">// The failure of the link connecting consumer and router will start from seconds 10.0 to 15.0</span>
+<span class="ansi32">+</span>	<span class="ansi32">//Simulator::Schedule (Seconds (10.0), ndn::LinkControlHelper::FailLink, Names::Find&lt;Node&gt; ("Node0"),Names::Find&lt;Node&gt; ("Node4"));</span>
+<span class="ansi32">+</span>	<span class="ansi32">//Simulator::Schedule (Seconds (15.0), ndn::LinkControlHelper::UpLink,   Names::Find&lt;Node&gt; ("Node0"),Names::Find&lt;Node&gt; ("Node4"));</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">Simulator::Stop (Seconds(simulationSpan));</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">//ZhangYu Add the trace，不愿意文件名称还有大小写的区别，所以把 routingName 全部转为小写</span>
+<span class="ansi32">+</span>	<span class="ansi32">std::transform(routingName.begin(), routingName.end(), routingName.begin(), ::tolower);</span>
+<span class="ansi32">+</span>	<span class="ansi32">string filename="-"+routingName+"-"+boost::lexical_cast&lt;std::string&gt;(InterestsPerSec)+".txt";</span>
+<span class="ansi32">+</span>	<span class="ansi32">//filename=".txt";</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">TraceSpan=simulationSpan/recordsNumber;</span>
+<span class="ansi32">+</span>	<span class="ansi32">if(TraceSpan&lt;1)</span>
+<span class="ansi32">+</span>		<span class="ansi32">TraceSpan=1;</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndn::CsTracer::InstallAll ("Results/cs-trace"+filename, Seconds (TraceSpan));</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndn::L3RateTracer::InstallAll ("Results/rate-trace"+filename, Seconds (TraceSpan));</span>
+<span class="ansi32">+</span>	<span class="ansi32">// L3AggregateTracer disappeared in new version</span>
+<span class="ansi32">+</span>	<span class="ansi32">//ndn::L3AggregateTracer::InstallAll ("Results/aggregate-trace-"+filename, Seconds (1));</span>
+<span class="ansi32">+</span>	<span class="ansi32">ndn::AppDelayTracer::InstallAll ("Results/app-delays-trace"+filename);</span>
+<span class="ansi32">+</span>	<span class="ansi32">L2RateTracer::InstallAll ("Results/drop-trace"+filename, Seconds (TraceSpan));</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>	<span class="ansi32">Simulator::Run ();</span>
+<span class="ansi32">+</span>	<span class="ansi32">Simulator::Destroy ();</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  return 0;</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span><span class="ansi32">} // namespace ns3</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">int</span>
+<span class="ansi32">+</span><span class="ansi32">main(int argc, char* argv[])</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span><span class="ansi32">  return ns3::main(argc, argv);</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi1">diff --git a/examples/topologies/topo-load-balancer2.txt b/examples/topologies/topo-load-balancer2.txt</span>
+<span class="ansi1">new file mode 100644</span>
+<span class="ansi1">index 0000000..26023f7</span>
+<span class="ansi1">--- /dev/null</span>
+<span class="ansi1">+++ b/examples/topologies/topo-load-balancer2.txt</span>
+<span class="ansi36">@@ -0,0 +1,52 @@</span>
+<span class="ansi32">+</span><span class="ansi32"># topo-load-balancer.txt</span>
+<span class="ansi32">+</span><span class="ansi32"># 拓扑的坐标不能为0，否则--vis显示不正常，因此在上面的拓扑中全部加1平移</span>
+<span class="ansi32">+</span><span class="ansi32">#</span>
+<span class="ansi32">+</span><span class="ansi32">#                          /-----\</span>
+<span class="ansi32">+</span><span class="ansi32">#                          | CSU |</span>
+<span class="ansi32">+</span><span class="ansi32">#                 +-----&gt;  | HUB |  &lt;----+</span>
+<span class="ansi32">+</span><span class="ansi32">#                 |        \-----/       |</span>
+<span class="ansi32">+</span><span class="ansi32">#                 |                      |  1Mbps/10ms delay</span>
+<span class="ansi32">+</span><span class="ansi32">#                 v                      v</span>
+<span class="ansi32">+</span><span class="ansi32">#               /------\               /----------\</span>
+<span class="ansi32">+</span><span class="ansi32">#               | UCLA |               | Consumer |</span>
+<span class="ansi32">+</span><span class="ansi32">#               | HUB  |               |   CSU-1  |</span>
+<span class="ansi32">+</span><span class="ansi32">#       +-----&gt; \------/ &lt;-----+       \----------/</span>
+<span class="ansi32">+</span><span class="ansi32">#       |                      |</span>
+<span class="ansi32">+</span><span class="ansi32">#       |                      |</span>
+<span class="ansi32">+</span><span class="ansi32">#       v                      v</span>
+<span class="ansi32">+</span><span class="ansi32">#   /----------\           /----------\</span>
+<span class="ansi32">+</span><span class="ansi32">#   | Producer |           | Producer |</span>
+<span class="ansi32">+</span><span class="ansi32">#   |  UCLA-1  |           |  UCLA-2  |</span>
+<span class="ansi32">+</span><span class="ansi32">#   \----------/           \----------/</span>
+<span class="ansi32">+</span><span class="ansi32">#</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32"># any empty lines and lines starting with '#' symbol is ignored</span>
+<span class="ansi32">+</span><span class="ansi32">#</span>
+<span class="ansi32">+</span><span class="ansi32"># The file should contain exactly two sections: router and link, each starting with the corresponding keyword</span>
+<span class="ansi32">+</span><span class="ansi32">#</span>
+<span class="ansi32">+</span><span class="ansi32"># router section defines topology nodes and their relative positions (e.g., to use in visualizer)</span>
+<span class="ansi32">+</span><span class="ansi32">router</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32"># each line in this section represents one router and should have the following data</span>
+<span class="ansi32">+</span><span class="ansi32"># node   comment    yPos    xPos</span>
+<span class="ansi32">+</span><span class="ansi32">CSU-1    NA          4       6</span>
+<span class="ansi32">+</span><span class="ansi32">CSU-HUB  NA          5       4</span>
+<span class="ansi32">+</span><span class="ansi32">UCLA-HUB NA          4       2</span>
+<span class="ansi32">+</span><span class="ansi32">UCLA-1   NA          1       1</span>
+<span class="ansi32">+</span><span class="ansi32">UCLA-2   NA          1       3</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32"># Note that `node` can be any string. It is possible to access to the node by name using Names::Find, see examples.</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32"># link section defines point-to-point links between nodes and characteristics of these links</span>
+<span class="ansi32">+</span><span class="ansi32">link</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32"># Each line should be in the following format (only first two are required, the rest can be omitted)</span>
+<span class="ansi32">+</span><span class="ansi32"># srcNode   dstNode     bandwidth   metric  delay   queue</span>
+<span class="ansi32">+</span><span class="ansi32"># bandwidth: link bandwidth</span>
+<span class="ansi32">+</span><span class="ansi32"># metric: routing metric</span>
+<span class="ansi32">+</span><span class="ansi32"># delay:  link delay</span>
+<span class="ansi32">+</span><span class="ansi32"># queue:  MaxPackets for transmission queue on the link (both directions)</span>
+<span class="ansi32">+</span><span class="ansi32">CSU-1       CSU-HUB     1Mbps       1       10ms    10</span>
+<span class="ansi32">+</span><span class="ansi32">CSU-HUB     UCLA-HUB    1Mbps       1       10ms    10</span>
+<span class="ansi32">+</span><span class="ansi32">UCLA-HUB    UCLA-1      1Mbps       1       10ms    10</span>
+<span class="ansi32">+</span><span class="ansi32">UCLA-HUB    UCLA-2      1Mbps       1       10ms    10</span>
+<span class="ansi1">diff --git a/helper/ndn-fib-helper.cpp b/helper/ndn-fib-helper.cpp</span>
+<span class="ansi1">index 921c20f..42cc790 100644</span>
+<span class="ansi1">--- a/helper/ndn-fib-helper.cpp</span>
+<span class="ansi1">+++ b/helper/ndn-fib-helper.cpp</span>
+<span class="ansi36">@@ -169,6 +169,78 @@</span> FibHelper::AddRoute(const std::string&amp; nodeName, const Name&amp; prefix,
+   AddRoute(node, prefix, otherNode, metric);
+ }
+ 
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">/* ****************************ZhangYu 2020-8-30 添加 Randomized Rounding******************************</span>
+<span class="ansi32">+</span><span class="ansi32"> * ZhangYu 2020-8-30 估计原来是考虑到只是增加了Probability，移除时可以使用Metric的移除直接移除，没有增加Remove</span>
+<span class="ansi32">+</span><span class="ansi32"> * ZhangYu 2018-1-31 添加了端口概率，为了方便，将所有调用的函数都排在后面</span>
+<span class="ansi32">+</span><span class="ansi32"> * 2018-2-1 在tlv格式中，因为浮点数编码复杂，所有只处理整数类型，因为将probability在数据源头将其变为整数，使用时复原</span>
+<span class="ansi32">+</span><span class="ansi32"> */</span>
+<span class="ansi32">+</span><span class="ansi32">void</span>
+<span class="ansi32">+</span><span class="ansi32">FibHelper::AddRoute(const std::string&amp; nodeName, const Name&amp; prefix,</span>
+<span class="ansi32">+</span><span class="ansi32">                    const std::string&amp; otherNodeName, int32_t metric, int32_t probability)</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span><span class="ansi32">  Ptr&lt;Node&gt; node = Names::Find&lt;Node&gt;(nodeName);</span>
+<span class="ansi32">+</span><span class="ansi32">  NS_ASSERT_MSG(node != 0, "Node [" &lt;&lt; nodeName &lt;&lt; "] does not exist");</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  Ptr&lt;Node&gt; otherNode = Names::Find&lt;Node&gt;(otherNodeName);</span>
+<span class="ansi32">+</span><span class="ansi32">  NS_ASSERT_MSG(otherNode != 0, "Node [" &lt;&lt; otherNodeName &lt;&lt; "] does not exist");</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  AddRoute(node, prefix, otherNode, metric, probability);</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">void</span>
+<span class="ansi32">+</span><span class="ansi32">FibHelper::AddRoute(Ptr&lt;Node&gt; node, const Name&amp; prefix, Ptr&lt;Node&gt; otherNode, int32_t metric, int32_t probability)</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span><span class="ansi32">  for (uint32_t deviceId = 0; deviceId &lt; node-&gt;GetNDevices(); deviceId++) {</span>
+<span class="ansi32">+</span><span class="ansi32">    Ptr&lt;PointToPointNetDevice&gt; netDevice =</span>
+<span class="ansi32">+</span><span class="ansi32">      DynamicCast&lt;PointToPointNetDevice&gt;(node-&gt;GetDevice(deviceId));</span>
+<span class="ansi32">+</span><span class="ansi32">    if (netDevice == 0)</span>
+<span class="ansi32">+</span><span class="ansi32">      continue;</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">    Ptr&lt;Channel&gt; channel = netDevice-&gt;GetChannel();</span>
+<span class="ansi32">+</span><span class="ansi32">    if (channel == 0)</span>
+<span class="ansi32">+</span><span class="ansi32">      continue;</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">    if (channel-&gt;GetDevice(0)-&gt;GetNode() == otherNode</span>
+<span class="ansi32">+</span><span class="ansi32">        || channel-&gt;GetDevice(1)-&gt;GetNode() == otherNode) {</span>
+<span class="ansi32">+</span><span class="ansi32">      Ptr&lt;L3Protocol&gt; ndn = node-&gt;GetObject&lt;L3Protocol&gt;();</span>
+<span class="ansi32">+</span><span class="ansi32">      NS_ASSERT_MSG(ndn != 0, "Ndn stack should be installed on the node");</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">      shared_ptr&lt;Face&gt; face = ndn-&gt;getFaceByNetDevice(netDevice);</span>
+<span class="ansi32">+</span><span class="ansi32">      NS_ASSERT_MSG(face != 0, "There is no face associated with the p2p link");</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">      AddRoute(node, prefix, face, metric, probability);</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">      return;</span>
+<span class="ansi32">+</span><span class="ansi32">    }</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">void</span>
+<span class="ansi32">+</span><span class="ansi32">FibHelper::AddRoute(Ptr&lt;Node&gt; node, const Name&amp; prefix, shared_ptr&lt;Face&gt; face, int32_t metric, int32_t probability)</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span><span class="ansi32">  NS_LOG_LOGIC("[" &lt;&lt; node-&gt;GetId() &lt;&lt; "]$ route add " &lt;&lt; prefix &lt;&lt; " via " &lt;&lt; face-&gt;getLocalUri()</span>
+<span class="ansi32">+</span><span class="ansi32">                   &lt;&lt; " metric " &lt;&lt; metric);</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  // Get L3Protocol object</span>
+<span class="ansi32">+</span><span class="ansi32">  Ptr&lt;L3Protocol&gt; L3protocol = node-&gt;GetObject&lt;L3Protocol&gt;();</span>
+<span class="ansi32">+</span><span class="ansi32">  // Get the forwarder instance</span>
+<span class="ansi32">+</span><span class="ansi32">  shared_ptr&lt;nfd::Forwarder&gt; m_forwarder = L3protocol-&gt;getForwarder();</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  ControlParameters parameters;</span>
+<span class="ansi32">+</span><span class="ansi32">  parameters.setName(prefix);</span>
+<span class="ansi32">+</span><span class="ansi32">  parameters.setFaceId(face-&gt;getId());</span>
+<span class="ansi32">+</span><span class="ansi32">  parameters.setCost(metric);</span>
+<span class="ansi32">+</span><span class="ansi32">  parameters.setProbability(probability);</span>
+<span class="ansi32">+</span><span class="ansi32">  AddNextHop(parameters, node);</span>
+<span class="ansi32">+</span><span class="ansi32">  //ZhangYu 2018-2-1</span>
+<span class="ansi32">+</span><span class="ansi32">  //std::cout &lt;&lt;"2018-2-1 FibHelper::AddRoute -- probability:" &lt;&lt; probability &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span><span class="ansi32">  //std::cout &lt;&lt; parameters &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">// *********************************************************************************</span>
+<span class="ansi32">+</span>
+ void
+ FibHelper::RemoveRoute(Ptr&lt;Node&gt; node, const Name&amp; prefix, shared_ptr&lt;Face&gt; face)
+ {
+<span class="ansi1">diff --git a/helper/ndn-fib-helper.hpp b/helper/ndn-fib-helper.hpp</span>
+<span class="ansi1">index 381ee2d..2306e47 100644</span>
+<span class="ansi1">--- a/helper/ndn-fib-helper.hpp</span>
+<span class="ansi1">+++ b/helper/ndn-fib-helper.hpp</span>
+<span class="ansi36">@@ -100,6 +100,46 @@</span> public:
+   AddRoute(const std::string&amp; nodeName, const Name&amp; prefix, const std::string&amp; otherNodeName,
+            int32_t metric);
+ 
+<span class="ansi32">+</span><span class="ansi32">  /*************************************所有需要调用的函数都放在后面*****************************</span>
+<span class="ansi32">+</span><span class="ansi32">   * ZhangYu 2020-8-30，2018-1-31 Add forwarding entry with face probability</span>
+<span class="ansi32">+</span><span class="ansi32">   *</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param nodeName Node name (refer to ns3::Names)</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param prefix Routing prefix</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param otherNode The other node name, to which interests (will be</span>
+<span class="ansi32">+</span><span class="ansi32">   *                  used to infer face id (refer to ns3::Names)</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param metric Routing metric</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param probability take face by probability</span>
+<span class="ansi32">+</span><span class="ansi32">   */</span>
+<span class="ansi32">+</span><span class="ansi32">  static void</span>
+<span class="ansi32">+</span><span class="ansi32">  AddRoute(const std::string&amp; nodeName, const Name&amp; prefix, const std::string&amp; otherNodeName,</span>
+<span class="ansi32">+</span><span class="ansi32">           int32_t metric, int32_t probability);</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  /**</span>
+<span class="ansi32">+</span><span class="ansi32">   * @brief Add forwarding entry to FIB (work only with point-to-point links)</span>
+<span class="ansi32">+</span><span class="ansi32">   *</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param node Node</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param prefix Routing prefix</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param otherNode The other node, to which interests (will be used to infer face id</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param metric Routing metric</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param probability take face by probability</span>
+<span class="ansi32">+</span><span class="ansi32">   */</span>
+<span class="ansi32">+</span><span class="ansi32">  static void</span>
+<span class="ansi32">+</span><span class="ansi32">  AddRoute(Ptr&lt;Node&gt; node, const Name&amp; prefix, Ptr&lt;Node&gt; otherNode, int32_t metric, int32_t probability);</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  /**</span>
+<span class="ansi32">+</span><span class="ansi32">   * \brief Add forwarding entry to FIB</span>
+<span class="ansi32">+</span><span class="ansi32">   *</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param node   Node</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param prefix Routing prefix</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param face   Face</span>
+<span class="ansi32">+</span><span class="ansi32">   * \param metric Routing metric</span>
+<span class="ansi32">+</span><span class="ansi32">   */</span>
+<span class="ansi32">+</span><span class="ansi32">  static void</span>
+<span class="ansi32">+</span><span class="ansi32">  AddRoute(Ptr&lt;Node&gt; node, const Name&amp; prefix, shared_ptr&lt;Face&gt; face, int32_t metric, int32_t probability);</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  //***************************************************************************************</span>
+<span class="ansi32">+</span>
+   /**
+    * \brief remove forwarding entry in FIB
+    *
+<span class="ansi1">diff --git a/helper/ndn-global-routing-helper.cpp b/helper/ndn-global-routing-helper.cpp</span>
+<span class="ansi1">index ebc4617..c27fbff 100644</span>
+<span class="ansi1">--- a/helper/ndn-global-routing-helper.cpp</span>
+<span class="ansi1">+++ b/helper/ndn-global-routing-helper.cpp</span>
+<span class="ansi36">@@ -386,5 +386,38 @@</span> GlobalRoutingHelper::CalculateAllPossibleRoutes()
+   }
+ }
+ 
+<span class="ansi32">+</span><span class="ansi32">// ZhangYu 2020-8-30, 2017-8-19 abandon scenarioHelper</span>
+<span class="ansi32">+</span><span class="ansi32">void GlobalRoutingHelper::addRouteHop(const std::string edgeStart,const std::string prefix,const std::string edgeEnd, std::int32_t metric)</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span>	<span class="ansi32">/*</span>
+<span class="ansi32">+</span>	<span class="ansi32">Py_Initialize();</span>
+<span class="ansi32">+</span>	<span class="ansi32">if(!Py_IsInitialized())</span>
+<span class="ansi32">+</span>	<span class="ansi32">{</span>
+<span class="ansi32">+</span>		<span class="ansi32">std::cout &lt;&lt; "can't Initialize python" &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>	<span class="ansi32">std::string path="~/OneDrive/SCIP_STP/scipLearn1";</span>
+<span class="ansi32">+</span>	<span class="ansi32">std::string chdir_cmd=std::string("sys.path.append(\""+path+"\")");</span>
+<span class="ansi32">+</span>	<span class="ansi32">const char* cstr_cmd=chdir_cmd.c_str();</span>
+<span class="ansi32">+</span>	<span class="ansi32">PyRun_SimpleString("import sys");</span>
+<span class="ansi32">+</span>	<span class="ansi32">//PyRun_SimpleString(cstr_cmd);</span>
+<span class="ansi32">+</span>	<span class="ansi32">PyObject *pName=PyString_FromString("learning");</span>
+<span class="ansi32">+</span>	<span class="ansi32">PyObject *pModule=PyImport_Import(pName);</span>
+<span class="ansi32">+</span>	<span class="ansi32">if(!pModule)</span>
+<span class="ansi32">+</span>	<span class="ansi32">{</span>
+<span class="ansi32">+</span>		<span class="ansi32">std::cout &lt;&lt; "can't find learning.py " &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span>	<span class="ansi32">}</span>
+<span class="ansi32">+</span>	<span class="ansi32">*/</span>
+<span class="ansi32">+</span><span class="ansi32">    FibHelper::AddRoute(edgeStart, prefix, edgeEnd,metric);</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span><span class="ansi32">// ZhangYu 2020-8-30, 2018-1-30 add probability for node</span>
+<span class="ansi32">+</span><span class="ansi32">void GlobalRoutingHelper::addRouteHop(const std::string edgeStart,const std::string prefix,const std::string edgeEnd, std::int32_t metric,</span>
+<span class="ansi32">+</span>		<span class="ansi32">std::double_t probability)</span>
+<span class="ansi32">+</span><span class="ansi32">{</span>
+<span class="ansi32">+</span>	<span class="ansi32">// ZhangYu 2018-2-1 因为浮点数的编码比较复杂，会导致处理速度慢。估计是由于这个原因在TLV格式的数据包中，只有几种不同长度的整数</span>
+<span class="ansi32">+</span>	<span class="ansi32">// 为了表示端口的占用概率，或者实现带宽的分配，需要浮点数，这里采用了简单的做法，放大后取整</span>
+<span class="ansi32">+</span><span class="ansi32">    FibHelper::AddRoute(edgeStart, prefix, edgeEnd, metric, std::round(probability*1000000));</span>
+<span class="ansi32">+</span><span class="ansi32">}</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>
+ } // namespace ndn
+ } // namespace ns3
+<span class="ansi1">diff --git a/helper/ndn-global-routing-helper.hpp b/helper/ndn-global-routing-helper.hpp</span>
+<span class="ansi1">index d14b2fe..7a0e052 100644</span>
+<span class="ansi1">--- a/helper/ndn-global-routing-helper.hpp</span>
+<span class="ansi1">+++ b/helper/ndn-global-routing-helper.hpp</span>
+<span class="ansi36">@@ -124,6 +124,21 @@</span> public:
+   static void
+   CalculateAllPossibleRoutes();
+ 
+<span class="ansi32">+</span><span class="ansi32">  /* ZhangYu 2020-8-30</span>
+<span class="ansi32">+</span><span class="ansi32">   * @ZY, 2017-8-19 try to caculate routes by python, and use the python results in ns3 c++</span>
+<span class="ansi32">+</span><span class="ansi32">   * add next hop for a route</span>
+<span class="ansi32">+</span><span class="ansi32">   * 原本打算用scenarioHelper来实现，结果发现它自成体系，拓扑和节点都用自己的，所以放弃</span>
+<span class="ansi32">+</span><span class="ansi32">   */</span>
+<span class="ansi32">+</span><span class="ansi32">  static void</span>
+<span class="ansi32">+</span><span class="ansi32">  addRouteHop(const std::string edgeStart,const std::string prefix, const std::string edgeEnd, std::int32_t metri);</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  /* ZhangYu 2020-8-30</span>
+<span class="ansi32">+</span><span class="ansi32">   * @ZY, 2018-1-30 add probability for the consumer node, in case of randomized rounding</span>
+<span class="ansi32">+</span><span class="ansi32">   */</span>
+<span class="ansi32">+</span><span class="ansi32">  static void</span>
+<span class="ansi32">+</span><span class="ansi32">  addRouteHop(const std::string edgeStart,const std::string prefix, const std::string edgeEnd, std::int32_t metri, std::double_t probability);</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span>
+ private:
+   void
+   Install(Ptr&lt;Channel&gt; channel);
+<span class="ansi1">diff --git a/ndn-cxx/ndn-cxx/encoding/tlv-nfd.hpp b/ndn-cxx/ndn-cxx/encoding/tlv-nfd.hpp</span>
+<span class="ansi1">index 1c30ab4..b134b5d 100644</span>
+<span class="ansi1">--- a/ndn-cxx/ndn-cxx/encoding/tlv-nfd.hpp</span>
+<span class="ansi1">+++ b/ndn-cxx/ndn-cxx/encoding/tlv-nfd.hpp</span>
+<span class="ansi36">@@ -37,6 +37,7 @@</span> enum {
+   Uri                 = 114,
+   Origin              = 111,
+   Cost                = 106,
+<span class="ansi32">+</span><span class="ansi32">  Probability		  = 113, //ZhangYu 2020-8-30, 2018-1-31</span>
+   Capacity            = 131,
+   Count               = 132,
+   Flags               = 108,
+<span class="ansi1">diff --git a/ndn-cxx/ndn-cxx/mgmt/nfd/control-command.cpp b/ndn-cxx/ndn-cxx/mgmt/nfd/control-command.cpp</span>
+<span class="ansi1">index 86ca500..89cb13d 100644</span>
+<span class="ansi1">--- a/ndn-cxx/ndn-cxx/mgmt/nfd/control-command.cpp</span>
+<span class="ansi1">+++ b/ndn-cxx/ndn-cxx/mgmt/nfd/control-command.cpp</span>
+<span class="ansi36">@@ -203,11 +203,15 @@</span> FibAddNextHopCommand::FibAddNextHopCommand()
+   m_requestValidator
+     .required(CONTROL_PARAMETER_NAME)
+     .optional(CONTROL_PARAMETER_FACE_ID)
+<span class="ansi31">-    .optional(CONTROL_PARAMETER_COST);</span>
+<span class="ansi32">+</span><span class="ansi32">    .optional(CONTROL_PARAMETER_COST)</span>
+<span class="ansi32">+</span>	<span class="ansi32">// ZhangYu 2018-2-1，是必要的还是可选的</span>
+<span class="ansi32">+</span>	<span class="ansi32">.optional(CONTROL_PARAMETER_PROBABILITY);</span>
+   m_responseValidator
+     .required(CONTROL_PARAMETER_NAME)
+     .required(CONTROL_PARAMETER_FACE_ID)
+<span class="ansi31">-    .required(CONTROL_PARAMETER_COST);</span>
+<span class="ansi32">+</span><span class="ansi32">    .required(CONTROL_PARAMETER_COST)</span>
+<span class="ansi32">+</span>	<span class="ansi32">// ZhangYu 2018-2-1，是必要的还是可选的，当写成.required后，不用 probability会导致出错</span>
+<span class="ansi32">+</span><span class="ansi41">  </span>	<span class="ansi32">.optional(CONTROL_PARAMETER_PROBABILITY);</span>
+ }
+ 
+ void
+<span class="ansi1">diff --git a/ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.cpp b/ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.cpp</span>
+<span class="ansi1">index 6c8f091..3651b11 100644</span>
+<span class="ansi1">--- a/ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.cpp</span>
+<span class="ansi1">+++ b/ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.cpp</span>
+<span class="ansi36">@@ -25,6 +25,9 @@</span>
+ #include "ndn-cxx/util/concepts.hpp"
+ #include "ndn-cxx/util/string-helper.hpp"
+ 
+<span class="ansi32">+</span><span class="ansi32">// ZhangYu 2020-8-30 for debug cout</span>
+<span class="ansi32">+</span><span class="ansi32">#include &lt;iostream&gt;</span>
+<span class="ansi32">+</span>
+ namespace ndn {
+ namespace nfd {
+ 
+<span class="ansi36">@@ -84,6 +87,11 @@</span> ControlParameters::wireEncode(EncodingImpl&lt;TAG&gt;&amp; encoder) const
+   if (this-&gt;hasCapacity()) {
+     totalLength += prependNonNegativeIntegerBlock(encoder, tlv::nfd::Capacity, m_capacity);
+   }
+<span class="ansi32">+</span><span class="ansi32">  // ZhangYu 2020-8-30,2018-1-31</span>
+<span class="ansi32">+</span><span class="ansi32">  if (this-&gt;hasProbability()){</span>
+<span class="ansi32">+</span>	<span class="ansi32">totalLength += prependNonNegativeIntegerBlock(encoder, tlv::nfd::Probability, m_probability);</span>
+<span class="ansi32">+</span><span class="ansi32">    //std::cout &lt;&lt; "ZhangYu 2018-1-31 wireEncode--  m_probability:" &lt;&lt; m_probability &lt;&lt; std::endl;</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+   if (this-&gt;hasCost()) {
+     totalLength += prependNonNegativeIntegerBlock(encoder, tlv::nfd::Cost, m_cost);
+   }
+<span class="ansi36">@@ -172,7 +180,13 @@</span> ControlParameters::wireDecode(const Block&amp; block)
+   if (this-&gt;hasCost()) {
+     m_cost = readNonNegativeInteger(*val);
+   }
+<span class="ansi31">-</span>
+<span class="ansi32">+</span><span class="ansi32">  // ZhangYu 2018-1-31</span>
+<span class="ansi32">+</span><span class="ansi32">  val = m_wire.find(tlv::nfd::Probability);</span>
+<span class="ansi32">+</span><span class="ansi32">  m_hasFields[CONTROL_PARAMETER_PROBABILITY] = val != m_wire.elements_end();</span>
+<span class="ansi32">+</span><span class="ansi32">  if (this-&gt;hasProbability()) {</span>
+<span class="ansi32">+</span><span class="ansi32">    m_probability = static_cast&lt;uint64_t&gt;(readNonNegativeInteger(*val));</span>
+<span class="ansi32">+</span><span class="ansi32">    //std::cout &lt;&lt; "ZhangYu 2018-1-31 ControlParameters::wireDecode--  m_probability:" &lt;&lt; m_probability&lt;&lt; std::endl;</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+   val = m_wire.find(tlv::nfd::Capacity);
+   m_hasFields[CONTROL_PARAMETER_CAPACITY] = val != m_wire.elements_end();
+   if (this-&gt;hasCapacity()) {
+<span class="ansi36">@@ -341,6 +355,10 @@</span> operator&lt;&lt;(std::ostream&amp; os, const ControlParameters&amp; parameters)
+   if (parameters.hasCost()) {
+     os &lt;&lt; "Cost: " &lt;&lt; parameters.getCost() &lt;&lt; ", ";
+   }
+<span class="ansi32">+</span><span class="ansi32">  // ZhangYu 2018-1-31</span>
+<span class="ansi32">+</span><span class="ansi32">  if (parameters.hasProbability()) {</span>
+<span class="ansi32">+</span><span class="ansi32">    os &lt;&lt; "Probability: " &lt;&lt; parameters.getProbability() &lt;&lt; ", ";</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+ 
+   if (parameters.hasCapacity()) {
+     os &lt;&lt; "Capacity: " &lt;&lt; parameters.getCapacity() &lt;&lt; ", ";
+<span class="ansi1">diff --git a/ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.hpp b/ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.hpp</span>
+<span class="ansi1">index d23cc27..069e1e7 100644</span>
+<span class="ansi1">--- a/ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.hpp</span>
+<span class="ansi1">+++ b/ndn-cxx/ndn-cxx/mgmt/nfd/control-parameters.hpp</span>
+<span class="ansi36">@@ -40,6 +40,7 @@</span> enum ControlParameterField {
+   CONTROL_PARAMETER_LOCAL_URI,
+   CONTROL_PARAMETER_ORIGIN,
+   CONTROL_PARAMETER_COST,
+<span class="ansi32">+</span><span class="ansi32">  CONTROL_PARAMETER_PROBABILITY, //ZhangYu 2020-8-30,参考 2018-1-31</span>
+   CONTROL_PARAMETER_CAPACITY,
+   CONTROL_PARAMETER_COUNT,
+   CONTROL_PARAMETER_FLAGS,
+<span class="ansi36">@@ -60,6 +61,7 @@</span> const std::string CONTROL_PARAMETER_FIELD[CONTROL_PARAMETER_UBOUND] = {
+   "LocalUri",
+   "Origin",
+   "Cost",
+<span class="ansi32">+</span><span class="ansi32">  "Probability", //ZhangYu 2020-8-30</span>
+   "Capacity",
+   "Count",
+   "Flags",
+<span class="ansi36">@@ -282,7 +284,38 @@</span> public: // getters &amp; setters
+     m_hasFields[CONTROL_PARAMETER_COST] = false;
+     return *this;
+   }
+<span class="ansi32">+</span><span class="ansi32">  /* ZhangYu 2020-8-30 modified for ndnSIM28 *************************</span>
+<span class="ansi32">+</span><span class="ansi32">   * ZhangYu 2018-1-31  add take face by probability *****************/</span>
+<span class="ansi32">+</span><span class="ansi32">  bool</span>
+<span class="ansi32">+</span><span class="ansi32">  hasProbability() const</span>
+<span class="ansi32">+</span><span class="ansi32">  {</span>
+<span class="ansi32">+</span><span class="ansi32">    return m_hasFields[CONTROL_PARAMETER_PROBABILITY];</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  uint64_t</span>
+<span class="ansi32">+</span><span class="ansi32">  getProbability() const</span>
+<span class="ansi32">+</span><span class="ansi32">  {</span>
+<span class="ansi32">+</span><span class="ansi32">    BOOST_ASSERT(this-&gt;hasProbability());</span>
+<span class="ansi32">+</span><span class="ansi32">    return m_probability;</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+<span class="ansi32">+</span>
+<span class="ansi32">+</span><span class="ansi32">  ControlParameters&amp;</span>
+<span class="ansi32">+</span><span class="ansi32">  setProbability(uint64_t probability)</span>
+<span class="ansi32">+</span><span class="ansi32">  {</span>
+<span class="ansi32">+</span><span class="ansi32">    m_wire.reset();</span>
+<span class="ansi32">+</span><span class="ansi32">    m_probability = probability;</span>
+<span class="ansi32">+</span><span class="ansi32">    m_hasFields[CONTROL_PARAMETER_PROBABILITY] = true;</span>
+<span class="ansi32">+</span><span class="ansi32">    return *this;</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+ 
+<span class="ansi32">+</span><span class="ansi32">  ControlParameters&amp;</span>
+<span class="ansi32">+</span><span class="ansi32">  unsetProbability()</span>
+<span class="ansi32">+</span><span class="ansi32">  {</span>
+<span class="ansi32">+</span><span class="ansi32">    m_wire.reset();</span>
+<span class="ansi32">+</span><span class="ansi32">    m_hasFields[CONTROL_PARAMETER_PROBABILITY] = false;</span>
+<span class="ansi32">+</span><span class="ansi32">    return *this;</span>
+<span class="ansi32">+</span><span class="ansi32">  }</span>
+<span class="ansi32">+</span><span class="ansi32">  //*****************************************************************/</span>
+   bool
+   hasCapacity() const
+   {
+<span class="ansi36">@@ -642,6 +675,7 @@</span> private: // fields
+   std::string         m_localUri;
+   RouteOrigin         m_origin;
+   uint64_t            m_cost;
+<span class="ansi32">+</span><span class="ansi32">  uint64_t			  m_probability; // ZhangYu 2020-8-30,2018-1-31</span>
+   uint64_t            m_capacity;
+   uint64_t            m_count;
+   uint64_t            m_flags;
+
+</pre>
+</body>
+
+</html>

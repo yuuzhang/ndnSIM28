@@ -122,7 +122,7 @@ GlobalRoutingHelper::CalculateLfidRoutes()
 
       const auto& face = get<shared_ptr<Face>>(neighbor);
       NS_ABORT_UNLESS(face->getMetric() == get<uint16_t>(boost::WeightInf));
-      face->setMetric(originalMetrics.at(nbId));
+      (originalMetrics.at(nbId));
     }
 
     // 4. Fill Abstract FIB:

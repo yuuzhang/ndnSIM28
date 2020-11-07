@@ -80,6 +80,7 @@ Producer::StartApplication()
   App::StartApplication();
 
   FibHelper::AddRoute(GetNode(), m_prefix, m_face, 0);
+  NS_LOG_DEBUG("ZhangYu 2020-11-6:  Producer App is Started");
 }
 
 void
@@ -96,7 +97,9 @@ Producer::OnInterest(shared_ptr<const Interest> interest)
   App::OnInterest(interest); // tracing inside
 
   NS_LOG_FUNCTION(this << interest);
-
+  
+  NS_LOG_DEBUG("ZhangYu 2020-11-6:  interest:" << interest);
+  
   if (!m_active)
     return;
 

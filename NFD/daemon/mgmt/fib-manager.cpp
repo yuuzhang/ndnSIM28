@@ -61,8 +61,11 @@ FibManager::addNextHop(const Name& topPrefix, const Interest& interest,
   const Name& prefix = parameters.getName();
   FaceId faceId = parameters.getFaceId();
   uint64_t cost = parameters.getCost();
-  // ZhangYu 2020-8-30,2018-2-1
-  uint64_t probability=std::numeric_limits<uint64_t>::max();
+  // ZhangYu 2020-8-30,2018-2-1,
+  // 2020-11-6，原本这里probability的默认值设置为 std::numeric_limits<uint64_t>::max()-1
+  // 而setProbability中以double型接受参数，保存在uint64的m_probability中时，转换为0，结果导致在获取时总得到 0
+  // 源代码中cost的值在数据传输使用uint64，但中间处理使用int32，probability也一致。默认值统一成int32::max-1
+  uint64_t probability=std::numeric_limits<int32_t>::max()-1;
   if(parameters.hasProbability()){
 	  probability=parameters.getProbability();
 	  //std::cout << "ZhangYu 2018-2-1 FibManager::addNexHop probability: " << probability << std::endl;

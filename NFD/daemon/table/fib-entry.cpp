@@ -65,7 +65,9 @@ Entry::addOrUpdateNextHop(Face& face, uint64_t cost)
   return std::make_pair(it, isNew);
 }
 
-//ZhangYu 2020-8-30,2018-1-30
+//ZhangYu 2020-8-30,2018-1-30,
+//2020-11-6  将其修改为 unit16_t，就可以得到 probability 是 65534，而不是0
+// 所以估计是 这里函数会设置最大值 1.8e19次，导致以后getProbability 值时溢出成 0
 std::pair<NextHopList::iterator, bool>
 Entry::addOrUpdateNextHop(Face& face, uint64_t cost, uint64_t probability)
 {
@@ -77,7 +79,10 @@ Entry::addOrUpdateNextHop(Face& face, uint64_t cost, uint64_t probability)
 	isNew = true;
 	  }
   it->setCost(cost);
+
   it->setProbability(probability);
+  //std::cout << "--------ZhangYu 2020-11-6 fib-entry setProbability: " << probability << std::endl;
+
   this->sortNextHops();
 
   return std::make_pair(it, isNew);

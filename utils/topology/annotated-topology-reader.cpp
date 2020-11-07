@@ -299,7 +299,7 @@ AnnotatedTopologyReader::ApplyOspfMetric()
         shared_ptr<ndn::Face> face = ndn->getFaceByNetDevice(link.GetFromNetDevice());
         NS_ASSERT(face != 0);
 
-        face->setMetric(metric);
+        (metric);
       }
     }
 
@@ -317,7 +317,7 @@ AnnotatedTopologyReader::ApplyOspfMetric()
         shared_ptr<ndn::Face> face = ndn->getFaceByNetDevice(link.GetToNetDevice());
         NS_ASSERT(face != 0);
 
-        face->setMetric(metric);
+        (metric);
       }
     }
   }

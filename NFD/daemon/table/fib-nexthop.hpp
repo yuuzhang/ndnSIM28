@@ -65,12 +65,16 @@ public:
   uint64_t
   getProbability() const
   {
+    //std::cout << "=========probability 获取:" << m_probability << std::endl;
 	  return m_probability;
   }
   void
-  setProbability(double probability)
+  // 2020-11-6 原来是设置了 unit64_t的最大值 18446744073709551614，这里用double 去取，结果为0
+  setProbability(uint64_t probability)
   {
+    //std::cout << "=========probability 设置:" << probability << std::endl;
 	  m_probability=probability;
+	//std::cout << "=========m_probability 设置:" << m_probability << std::endl;
   }
 
 private:
@@ -80,7 +84,8 @@ private:
    *  ZhangYu 2018-1-30 add face occupied probability, in case of randomized rounding
    *  use max() as default value, however maybe never be used.
    */
-  uint64_t m_probability=std::numeric_limits<uint64_t>::max();
+  //uint64_t m_probability=std::numeric_limits<uint64_t>::max()-1;
+  uint64_t m_probability=std::numeric_limits<int32_t>::max()-1;
 };
 
 } // namespace fib

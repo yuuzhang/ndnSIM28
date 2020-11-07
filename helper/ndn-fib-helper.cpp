@@ -42,6 +42,8 @@
 #include "ns3/ndnSIM/model/ndn-l3-protocol.hpp"
 #include "ns3/ndnSIM/helper/ndn-stack-helper.hpp"
 
+using namespace std;
+
 namespace ns3 {
 namespace ndn {
 
@@ -173,7 +175,7 @@ FibHelper::AddRoute(const std::string& nodeName, const Name& prefix,
 /* ****************************ZhangYu 2020-8-30 添加 Randomized Rounding******************************
  * ZhangYu 2020-8-30 估计原来是考虑到只是增加了Probability，移除时可以使用Metric的移除直接移除，没有增加Remove
  * ZhangYu 2018-1-31 添加了端口概率，为了方便，将所有调用的函数都排在后面
- * 2018-2-1 在tlv格式中，因为浮点数编码复杂，所有只处理整数类型，因为将probability在数据源头将其变为整数，使用时复原
+ * 2018-2-1 在tlv格式中，估计因为浮点数编码复杂，所以只处理整数类型，故将probability在数据源头将其变为整数，使用时复原
  */
 void
 FibHelper::AddRoute(const std::string& nodeName, const Name& prefix,
@@ -232,6 +234,8 @@ FibHelper::AddRoute(Ptr<Node> node, const Name& prefix, shared_ptr<Face> face, i
   parameters.setFaceId(face->getId());
   parameters.setCost(metric);
   parameters.setProbability(probability);
+  //std::cout << "**********ZhangYu 2020-11-6 ndn-fib-helper setProbability: " << probability << std::endl;
+
   AddNextHop(parameters, node);
   //ZhangYu 2018-2-1
   //std::cout <<"2018-2-1 FibHelper::AddRoute -- probability:" << probability << std::endl;

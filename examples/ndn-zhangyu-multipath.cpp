@@ -56,7 +56,7 @@ int
 main (int argc, char *argv[])
 {
 	bool manualAssign=true;
-	int InterestsPerSec=200;
+	int InterestsPerSec=100;
 	int simulationSpan=5;
 	int TraceSpan=1;
 	int recordsNumber=100;
@@ -97,7 +97,7 @@ main (int argc, char *argv[])
 	//生成consumer和producer的节点号动态数组
 	if(manualAssign)	{
 		int tmpConsumer[]={0};
-		int tmpProducer[]={2};
+		int tmpProducer[]={3};
 		consumerNodes.assign(tmpConsumer,tmpConsumer+sizeof(tmpConsumer)/sizeof(int));
 		producerNodes.assign(tmpProducer,tmpProducer+sizeof(tmpConsumer)/sizeof(int));
 	}
@@ -109,6 +109,12 @@ main (int argc, char *argv[])
 	}
 
 	//根据上面生成的节点对编号装载应用
+	//2020-11-6，为了以后改代码更容易，定义prefix变量，
+	//而不再直接使用/Node"+boost::lexical_cast<std::string> (consumerNodes[i])或者producerNode[i]
+	std::vector<string> prefixVar;
+	for(uint32_t i=0;i<producerNodes.size();i++)	{
+		prefixVar.push_back("/Node"+boost::lexical_cast<std::string> (producerNodes[i]));
+	}
 	for(uint32_t i=0;i<consumerNodes.size();i++)	{
 		ndn::AppHelper consumerHelper ("ns3::ndn::ConsumerCbr");
 		consumerHelper.SetAttribute("Frequency", StringValue (boost::lexical_cast<std::string>(InterestsPerSec)));        // 100 interests a second
@@ -121,25 +127,25 @@ main (int argc, char *argv[])
 		consumerHelper.SetAttribute("Randomize", StringValue("exponential"));
 
 		Ptr<Node> consumer1 = Names::Find<Node> ("Node"+boost::lexical_cast<std::string> (consumerNodes[i]));
-		consumerHelper.SetPrefix ("/Node"+boost::lexical_cast<std::string>(consumerNodes[i]));
+		consumerHelper.SetPrefix (prefixVar[i]);
 		ApplicationContainer app=consumerHelper.Install(consumer1);
 		app.Start(Seconds(0.01*i));
 		// Choosing forwarding strategy
-		ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast<std::string> (consumerNodes[i]), "/localhost/nfd/strategy/randomized-rounding");
+		ndn::StrategyChoiceHelper::InstallAll((ndn::Name)prefixVar[i], "/localhost/nfd/strategy/randomized-rounding");
 		//ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast<std::string> (consumerNodes[i]), "/localhost/nfd/strategy/best-route");
 		//ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast<std::string> (consumerNodes[i]), "/localhost/nfd/strategy/ncc");
 
-		std::cout <<"ZhangYu  consumer1->GetId(): " <<consumer1->GetId() << "  prefix: /Node"+boost::lexical_cast<std::string>(consumerNodes[i]) << std::endl;
+		std::cout <<"ZhangYu  consumer1->GetId(): " <<consumer1->GetId() << "  prefix: "+prefixVar[i] << std::endl;
 	}
 
 	for(uint32_t i=0;i<producerNodes.size();i++)	{
 		ndn::AppHelper producerHelper ("ns3::ndn::Producer");
 		producerHelper.SetAttribute ("PayloadSize", StringValue("1024"));
 		//认为producer节点的Prefix和对应位置的consumer节点一致
-		producerHelper.SetPrefix ("/Node"+boost::lexical_cast<std::string>(consumerNodes[i]));
+		producerHelper.SetPrefix (prefixVar[i]);
 
 		Ptr<Node> producer1 = Names::Find<Node> ("Node"+boost::lexical_cast<std::string> (producerNodes[i]));
-		ndnGlobalRoutingHelper.AddOrigins ("/Node"+boost::lexical_cast<std::string>(consumerNodes[i]), producer1);
+		ndnGlobalRoutingHelper.AddOrigins (prefixVar[i], producer1);
 		producerHelper.Install(producer1);
 		std::cout <<"ZhangYu producer1->GetId(): " <<producer1->GetId() << std::endl;
 	}
@@ -150,9 +156,9 @@ main (int argc, char *argv[])
 	}
 	else if(routingName.compare("debug")==0){
 		//当Consumer是0时，prefix=/Node0时，需要添加 0-->1-->4 的路由才可以，添加反向4->1->0没有Traffic
-		ndn::GlobalRoutingHelper::addRouteHop("Node0","/Node0","Node2",1,0.9);
-		ndn::GlobalRoutingHelper::addRouteHop("Node0","/Node0","Node3",1,0.1);
-		ndn::GlobalRoutingHelper::addRouteHop("Node3","/Node0","Node2",1,1.0);
+		ndn::GlobalRoutingHelper::addRouteHop("Node0",prefixVar[0],"Node3",1,1.0);
+		//ndn::GlobalRoutingHelper::addRouteHop("Node0","/Node0","Node2",1,0.5);
+		//ndn::GlobalRoutingHelper::addRouteHop("Node2","/Node0","Node3",1,1.0);
 	}
 	else if(routingName.compare("Flooding")==0){
 		ndn::GlobalRoutingHelper::CalculateAllPossibleRoutes();

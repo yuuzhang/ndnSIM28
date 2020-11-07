@@ -79,6 +79,12 @@ RandomizedRoundingStrategy::afterReceiveInterest(const FaceEndpoint& ingress, co
     this->rejectPendingInterest(pitEntry);
     return;
   }
+  /*
+  std::shuffle(nhs.begin(), nhs.end(), ndn::random::getRandomNumberEngine());
+  this->sendInterest(pitEntry, FaceEndpoint(nhs.front().getFace(), 0), interest);
+  NFD_LOG_DEBUG(std::endl << "      ZhangYu 2018-11-6: afterReceiveInterest-- Random "
+      << " face: " << FaceEndpoint(nhs.front().getFace(), 0) << "    interest:" << interest);
+  */
   // ZhangYu 2020-8-30
   boost::random::uniform_01<boost::random::mt19937&> dist(m_randomGenerator);
   //dist.reset();
@@ -91,22 +97,21 @@ RandomizedRoundingStrategy::afterReceiveInterest(const FaceEndpoint& ingress, co
   for(selected=nhs.begin(); selected !=nhs.end(); ++selected) {
 	  index=index+1;
 	  probabilitySum+=selected->getProbability();
+	  //std::cout << "ZhangYu 2018-3-25 probabilitySum: " << probabilitySum << "  ingeress: " << ingress << std::endl;
 	  //ZhangYu 2018-4-6这里是否加=应该影响不大，主要担心的是概率为0和1的记录，但都是小概率事件。
 	  if(randomValue<=probabilitySum){
 		  this->sendInterest(pitEntry, FaceEndpoint(selected->getFace(),0), interest);
-		  /*
-		  std::cout << "      ZhangYu 2018-2-1 afterReceiveInterest-- "
+		  /**/
+		  NFD_LOG_DEBUG(std::endl << "      ZhangYu 2018-2-1 afterReceiveInterest-- "
 				  << " face: " << FaceEndpoint(selected->getFace(),0)
 				  << " cost: " << selected->getCost()
-				  << " probability: " << selected->getProbability() << std::endl;
+				  << " probability: " << selected->getProbability());
 
-		  std::cout << "!!ZhangYu 2018-3-25, index:" << index << std::endl;
-		  */
+		  NFD_LOG_DEBUG(std::endl  << "!!ZhangYu 2018-3-25, index:" << index << "    interest:" << interest << std::endl);
+		  
 		  return;
 	  }
   }
-  //std::shuffle(nhs.begin(), nhs.end(), ndn::random::getRandomNumberEngine());
-  //this->sendInterest(pitEntry, FaceEndpoint(nhs.front().getFace(), 0), interest);
 }
 
 void
