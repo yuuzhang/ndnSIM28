@@ -1,5 +1,4 @@
-## -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
-# 没有上面的utf-8 then there will be error when including Chinese symbol 
+# if use Chinese symbol then there will be error
 
 from pybindgen import Module, FileCodeSink, param, retval, cppclass, typehandlers
 
@@ -139,13 +138,12 @@ def register_types(module):
                     parent=module['ns3::empty'], 
                     memory_policy=cppclass.ReferenceCountingMethodsPolicy(incref_method='Ref', 
                     decref_method='Unref', peekref_method='GetReferenceCount'))
-    module.add_class('TopologyReader',allow_subclassing=True, import_from_module='ns.topology_read', 
+    module.add_class('TopologyReader',import_from_module='ns.topology_read', 
                     parent=module['ns3::SimpleRefCount< ns3::TopologyReader, ns3::empty, ns3::DefaultDeleter<ns3::TopologyReader> >'])
     Module("TopologyReader",cpp_namespace="ns3::TopologyReader")
     # Refer to the file in Ubuntu1204, annotated-topology-reader.h (module 'ndnSIM'): ns3::AnnotatedTopologyReader [class]
-    module.add_class('AnnotatedTopologyReader', allow_subclassing=True,
-                    parent=module['ns3::TopologyReader'])
-    Module("AnnotatedTopologyReader",cpp_namespace="ns3::AnnotatedTopologyReader")
+    #module.add_class('AnnotatedTopologyReader', parent=module['ns3::TopologyReader'])
+    #Module("AnnotatedTopologyReader",cpp_namespace="ns3::AnnotatedTopologyReader")
     # have the folowing sentence would make error of adding AnnotatedTopologyReader
     #module.add_cpp_namespace('ns3::AnnotatedTopologyReader') 
 
@@ -558,24 +556,19 @@ def reg_other_modules(root_module):
 
     # ZhangYu 2017-9-5 refer to same name file in Ubuntu1204 
     def reg_TopologyReader(cls):
-        cls.add_constructor([])
-        cls.add_method('SetFileName', 'void', [param('std::string const &', 'fileName')])
+        #  cls.add_constructor([])
+        #  cls.add_method('SetFileName', 'void', [param('std::string const &', 'fileName')])
     reg_TopologyReader(root_module['ns3::TopologyReader'])
     
     def reg_AnnotatedTopologyReader(cls):
          #cls.add_constructor('void',[param('std::string const &', 'path', default_value='""'), param('double', 'scale', default_value='1.0e+0')])
-         # 上面加了个void就会导致错误
-         cls.add_constructor([param('std::string const &', 'path', default_value='""'), param('double', 'scale', default_value='1.0e+0')])
-         # 2020-12-26放弃了调试Read，因为最好的状态就是报告：
-         # AttributeError: 'ndnSIM.AnnotatedTopologyReader' object has no attribute 'Read'
-         cls.add_method('Read', retval('const ns3::NodeContainer&'),[], is_static=True)
-         # getAllNodes是为了测试NodeContainer不行，但Node就可以，关键是处理不对NodeContainer这个类
-         cls.add_method('getAllNodes', 'ns3::Ptr< ns3::Node >', [])
-         #cls.add_method('GetNodes', retval('const ns3::NodeContainer&','nodes'), [], is_const=True,is_virtual=True)
-         cls.add_method('ApplyOspfMetric','void',[])
-         cls.add_method('FindNodeFromName','ns3::Ptr< ns3::Node >', [param('std::string const &', 'name')])
+         #cls.add_constructor([param('std::string const &', 'path', default_value='""'), param('double', 'scale', default_value='1.0e+0')])
+         #cls.add_method('Read', retval('ns3::NodeContainer'), [],is_virtual=True, is_pure_virtual=True)
+         #cls.add_method('GetNodes', retval('const ns3::NodeContainer', 'nodes'), [], is_const=True, is_virtual=True)
+         #cls.add_method('ApplyOspfMetric','void',[])
+         #cls.add_method('FindNodeFromName','ns3::Ptr< ns3::Node >', [param('std::string const &', 'name')])
          # ZhangYu 2018-1-28 for traffic load configure
-         cls.add_method('GetNodeName','std::string',[param('ns3::Ptr< ns3::Node >','node')])
+         #cls.add_method('GetNodeName','std::string',[param('ns3::Ptr< ns3::Node >','node')])
     reg_AnnotatedTopologyReader(root_module['ns3::AnnotatedTopologyReader'])
     
     # ZhangYu 2018-1-28 add for configure traffic load

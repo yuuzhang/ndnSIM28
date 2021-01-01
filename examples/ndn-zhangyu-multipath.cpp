@@ -96,8 +96,8 @@ main (int argc, char *argv[])
 	std::vector<int> consumerNodes,producerNodes;
 	//生成consumer和producer的节点号动态数组
 	if(manualAssign)	{
-		int tmpConsumer[]={0};
-		int tmpProducer[]={3};
+		int tmpConsumer[]={0,1};
+		int tmpProducer[]={2,3};
 		consumerNodes.assign(tmpConsumer,tmpConsumer+sizeof(tmpConsumer)/sizeof(int));
 		producerNodes.assign(tmpProducer,tmpProducer+sizeof(tmpConsumer)/sizeof(int));
 	}
@@ -131,9 +131,9 @@ main (int argc, char *argv[])
 		ApplicationContainer app=consumerHelper.Install(consumer1);
 		app.Start(Seconds(0.01*i));
 		// Choosing forwarding strategy
-		ndn::StrategyChoiceHelper::InstallAll((ndn::Name)prefixVar[i], "/localhost/nfd/strategy/randomized-rounding");
+		//ndn::StrategyChoiceHelper::InstallAll((ndn::Name)prefixVar[i], "/localhost/nfd/strategy/randomized-rounding");
 		//ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast<std::string> (consumerNodes[i]), "/localhost/nfd/strategy/best-route");
-		//ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast<std::string> (consumerNodes[i]), "/localhost/nfd/strategy/ncc");
+		ndn::StrategyChoiceHelper::InstallAll("/Node"+boost::lexical_cast<std::string> (consumerNodes[i]), "/localhost/nfd/strategy/ncc");
 
 		std::cout <<"ZhangYu  consumer1->GetId(): " <<consumer1->GetId() << "  prefix: "+prefixVar[i] << std::endl;
 	}
@@ -150,9 +150,17 @@ main (int argc, char *argv[])
 		std::cout <<"ZhangYu producer1->GetId(): " <<producer1->GetId() << std::endl;
 	}
 
+
 	// Calculate and install FIBs
 	if(routingName.compare("BestRoute")==0){
 	  ndn::GlobalRoutingHelper::CalculateRoutes ();
+	}
+	else if(routingName.compare("k-shortest")==0){
+		ndn::GlobalRoutingHelper::CalculateNoCommLinkMultiPathRoutes(2);
+	}
+	else if(routingName.compare("MultiPathPairFirst")==0){
+		ndn::GlobalRoutingHelper::CalculateNoCommLinkMultiPathRoutesPairFirst();
+		//ndn::GlobalRoutingHelper::CalculateRoutes();
 	}
 	else if(routingName.compare("debug")==0){
 		//当Consumer是0时，prefix=/Node0时，需要添加 0-->1-->4 的路由才可以，添加反向4->1->0没有Traffic

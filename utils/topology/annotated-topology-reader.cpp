@@ -144,6 +144,27 @@ AnnotatedTopologyReader::GetNodes() const
   return m_nodes;
 }
 
+//ZhangYu 2017-9-19 因为直接给modulegen_gcc添加Names模块不成功，因此在此加上按名字找节点
+// 2018-1-28又加上了得到节点名字
+Ptr<Node>
+AnnotatedTopologyReader::getAllNodes()
+{
+	//Read();
+	Ptr<Node> node;
+	return node;
+}
+
+Ptr<Node>
+AnnotatedTopologyReader::FindNodeFromName(const std::string name)
+{
+	Ptr<Node> node = Names::Find<Node> (name);
+	return node;
+}
+std::string
+AnnotatedTopologyReader::GetNodeName(Ptr<Node> node)
+{
+	return Names::FindName (node);
+}
 const std::list<TopologyReader::Link>&
 AnnotatedTopologyReader::GetLinks() const
 {
@@ -151,7 +172,7 @@ AnnotatedTopologyReader::GetLinks() const
 }
 
 NodeContainer
-AnnotatedTopologyReader::Read(void)
+AnnotatedTopologyReader::Read()
 {
   ifstream topgen;
   topgen.open(GetFileName().c_str());

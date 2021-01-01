@@ -124,6 +124,30 @@ public:
   static void
   CalculateAllPossibleRoutes();
 
+    /* ZhangYu 2018-2-28 从2014年的版本中找出来的代码加上
+     * 为了对比，修改为 k-shortest path
+     */
+    static void
+    CalculateNoCommLinkMultiPathRoutes(std::int32_t k);
+
+    /*
+     * @ZY, back up originalMetric for all edges, using in CalculateNoCommLinkMultiPathRoutes
+     */
+    static void
+    BackupRestoreOriginalMetrics(const std::string action);
+    /*
+     * @ZY, 2015-1-7 no common link multi-path algorithms PairFirst
+     */
+    static void
+    CalculateNoCommLinkMultiPathRoutesPairFirst();
+    /*
+     * @ZY, 2016-12-6 no common link multi-path algorithms PairFirst, but add reverse routes
+     *
+     */
+    static void
+    CalculateNoCommLinkMultiPathRoutesPairFirst(bool addReverseRoute);
+
+
   /* ZhangYu 2020-8-30
    * @ZY, 2017-8-19 try to caculate routes by python, and use the python results in ns3 c++
    * add next hop for a route

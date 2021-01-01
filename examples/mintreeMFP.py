@@ -1,4 +1,5 @@
 # _*_ coding: utf-8 _*_
+
 from pyscipopt import Model, Conshdlr, quicksum , SCIP_RESULT, SCIP_PRESOLTIMING, SCIP_PROPTIMING, SCIP_PARAMSETTING, SCIP_PARAMEMPHASIS
 from pyscipopt.scip import Expr, ExprCons, Term
 import networkx as nx             #导入networkx包
@@ -194,10 +195,12 @@ def readTopology(filename,cap=None):
     # ZhangYu 2018-1-28使用SCIP计算时，发现这里没有设置是否无向图， 而Matlab有这个选项
     isUndirectedGraph=True   
     mark=["router\n","link\n"]
+    if(not filename.startswith('/')):
+        filename=re.findall(".+/ns-3/",sys.path[0])[0]+"src/ndnSIM/examples/topologies/"+filename
     try:
-        filehandle = open(sys.path[0]+filename,'r')
+        filehandle = open(filename,'r')
     except:
-        print("Could not open file " + sys.path[0]+filename)
+        print("Could not open file " + filename)
         quit()
     filelines=filehandle.readlines()
     markPos=[]
@@ -212,9 +215,15 @@ def readTopology(filename,cap=None):
             alineArray=str(aline).split()
             if cap is None:
                 # 这里允许节点是诸如 UCLA-A这样的名字
+                if str(alineArray[2]).endswith("kbps"):
+                    datarate=float(re.findall("\d+\.?\d*",alineArray[2])[0])*1000
+                elif str(alineArray[2]).endswith("Mbps"):
+                    datarate=float(re.findall("\d+\.?\d*",alineArray[2])[0])*1000000
+                else:
+                    print("dataRate is in a error format, need to be fixed in txt or code")
+                    print(str(alineArray[2]))
                 edge[str(alineArray[0]),
-                     str(alineArray[1])]={'cap':re.findall(
-                         "\d+",str(alineArray[2]))[0],'cost':re.findall("\d+",str(alineArray[3]))[0]}
+                     str(alineArray[1])]={'cap':datarate,'cost':re.findall("\d+",str(alineArray[3]))[0]}
             else:
                 edge[str(alineArray[0]),
                      str(alineArray[1])]={'cap':cap,'cost':re.findall("\d+",str(alineArray[3]))[0]}
@@ -257,12 +266,23 @@ def readTopology(filename,cap=None):
     
     return edge,node
 
-def caculatemaxConcurrentMFPRoute(filename,consumerList,producerList):
+def caculatemaxConcurrentMFPRoute(filenameORn,*args):
     # Traffic Matrix d[1,5] represent interest from node 1 to node 5
-    e,n=readTopology(filename)
-    d=OrderedDict()
-    for i in range(len(consumerList)):
-        d[consumerList[i],producerList[i]]=1
+    # 2020-10 为了ns3gym的调用，更优雅的方式是不总传递filename，Python3.4有singledispatch实现函数重载，为了兼容没用
+    if (isinstance(filenameORn,str)):
+        e,n=readTopology(filenameORn)
+        for i in range(len(args)):
+            if(type(args[0]==list)):
+                consumerList=args[0]
+                producerList=args[1]
+        d=OrderedDict()
+        for i in range(len(consumerList)):
+            d[consumerList[i],producerList[i]]=1   
+    elif(isinstance(filenameORn,dict)):
+        n=filenameORn
+        e=args[0]
+        d=args[1]
+    #------------处理完参数，开始计算-------------
     #model=maxConcurrentMFP(n, e, d)
     model=maxConcurrentFlowMinCostMFP(n,e,d)
     model.hideOutput()
@@ -283,7 +303,6 @@ def caculatemaxConcurrentMFPRoute(filename,consumerList,producerList):
     '''
         
     routeList=[]
-    probability=1.0
     rG=nx.DiGraph()
     for (s,t) in d.keys():
         # 2018-3-26，为了去掉解中的路由环路
@@ -320,7 +339,7 @@ def caculatemaxConcurrentMFPRoute(filename,consumerList,producerList):
                 r={'edgeStart':i,'edgeEnd':j,'prefix':"/"+t,'cost':1, 'probability':
                    (R[i][j]['flow']/totalInFlow)}
                 routeList.append(r)
-                print (r)
+                #print (r)
     return lamb,routeList
 
 def caculatenoCommLinkPairFirst(filename,consumerList,producerList):
@@ -335,7 +354,7 @@ def caculatenoCommLinkPairFirst(filename,consumerList,producerList):
     if __name__=="__main__":
        print("\n========caculate no common link multipath pair first======")
     e,n=readTopology(filename)
-    edgecapacity=0;
+    edgecapacity=0
     d=OrderedDict()
     for i in range(len(consumerList)):
         d[consumerList[i],producerList[i]]=1
@@ -359,7 +378,7 @@ def caculatenoCommLinkPairFirst(filename,consumerList,producerList):
                 continue
             if(len(p)>1):
                 hasPath=True
-                if(not(pathsList.has_key((s,t)))):
+                if((s,t) not in pathsList):
                     pathsList[s,t]=[]
                 pathsList[s,t].append(p)
                 print ('  ----source:{0}, sink:{1}, path:{2}'.format(s,t,p))
@@ -420,7 +439,7 @@ def caculateKshortest(filename,consumerList,producerList,K):
     if __name__=="__main__":
        print("\n========caculate K-shortest Path======")
     e,n=readTopology(filename)
-    edgecapacity=0;
+    edgecapacity=0
     d=OrderedDict()
     for i in range(len(consumerList)):
         d[consumerList[i],producerList[i]]=1
@@ -441,7 +460,7 @@ def caculateKshortest(filename,consumerList,producerList,K):
             except:
                 break
             if(len(p)>1):
-                if(not(pathsList.has_key((s,t)))):
+                if((s,t) not in pathsList):
                     pathsList[s,t]=[]
                 pathsList[s,t].append(p)
                 print ('  ----source:{0}, sink:{1}, path:{2}'.format(s,t,p))
@@ -501,7 +520,7 @@ def caculateKshortestwithRestore(filename,consumerList,producerList,K):
     if __name__=="__main__":
        print("\n========caculate K-shortest Path with Restore======")
     e,n=readTopology(filename)
-    edgecapacity=0;
+    edgecapacity=0
     d=OrderedDict()
     for i in range(len(consumerList)):
         d[consumerList[i],producerList[i]]=1
@@ -513,7 +532,7 @@ def caculateKshortestwithRestore(filename,consumerList,producerList,K):
         edgecapacity=int(e[i,j]['cap']) #这里认为网络容量是均匀的，所以用了偷懒的做法
         #print(G[i][j]['weight'])
         #print(G.edges[i,j]['cap'])
-    if nx.__version__=="2.1" or nx.__version__=="2.2":
+    if nx.__version__=="2.1" or nx.__version__>="2.2":
         originalG=G.copy(as_view=False)
     else:
         originalG=G.copy(with_data=True)
@@ -526,7 +545,7 @@ def caculateKshortestwithRestore(filename,consumerList,producerList,K):
             except:
                 break
             if(len(p)>1):
-                if(not(pathsList.has_key((s,t)))):
+                if((s,t) not in pathsList):
                     pathsList[s,t]=[]
                 pathsList[s,t].append(p)
                 print ('  ----source:{0}, sink:{1}, path:{2}'.format(s,t,p))
@@ -534,7 +553,7 @@ def caculateKshortestwithRestore(filename,consumerList,producerList,K):
                     G.remove_edge(p[i], p[i+1])
             else:
                 break
-        if nx.__version__=="2.1" or nx.__version__=="2.2":
+        if nx.__version__=="2.1" or nx.__version__>="2.2":
             G=originalG.copy(as_view=False)
         else:
             G=originalG.copy(with_data=True)
@@ -585,7 +604,7 @@ def caculateMaxMFPRoute(filename,consumerList,producerList):
     model.hideOutput()
     model.optimize()
     lamb=model.getObjVal()
-    print ("  --------variant lambda is:",lamb)
+    print ("  --------variant lambda is:",lamb )
     for v in model.getVars():
         if model.getVal(v)>EPS:
             print('{0}={1}'.format(v.name,model.getVal(v)))
@@ -599,6 +618,7 @@ def caculateMaxMFPRoute(filename,consumerList,producerList):
                 routeList.append(d)
                 #print('edgeUsed({0},{1})={2}',format(i,j,z[i,j]))
     return routeList
+
 def TenNodesTopology():
     isUndirectedGraph=True
     n=dict()
@@ -653,7 +673,7 @@ def SixNodesTopology():
     #d['Node0','Node3']=1
 
 '''
-为了能支持更一般化的节点名字，所以在 readTopology中没有提取节点的数值部分。但是为了和Matlab中节点的顺序一致
+为了能支持更一般化的节点名字，所以在 readTopology中没有只提取节点的数值部分。但是为了和Matlab中节点的顺序一致
 以便于能自动产生一样的Traffic，所以这里必须按照数值部分排序，Node11不能自动排在Node2之前，所以需要提取数字
 '''
 def customedSort(nodeName):
@@ -663,36 +683,21 @@ if __name__ == "__main__":
     filename="5nodes-Debug.txt"    
     filename="topo-for-CompareMultiPath.txt"
     #filename="200Nodes-4.txt"
-    e,n=readTopology("/topologies/"+filename)
-    manualAssign=False
+    e,n=readTopology("topo-for-CompareMultiPath.txt")
+    manualAssign=True
     consumerList=[]
     producerList=[]
     if(manualAssign):
-        consumerList=['Node0']
-        producerList=['Node3']
-        #consumerList=['Node0','Node1','Node2','Node3','Node4','Node5','Node6','Node7','Node8','Node9','Node10','Node11','Node12','Node13']
-        #producerList=['Node14','Node15','Node16','Node17','Node18','Node19','Node20','Node21','Node22','Node23','Node24','Node25','Node26','Node27']
-        
-        '''
-        d['Node4','Node0']=1
-        d['Node3','Node0']=1
-        '''
-    else:
-        K=int(np.floor(len(n)/2))
-        nodesName=n.keys()
-        nodesName.sort(key=customedSort)
-        for k in range(K):
-            consumerList.append(nodesName[k])
-            producerList.append(nodesName[k+K])
-    d=OrderedDict()
-    for i in range(len(consumerList)):
-        d[consumerList[i],producerList[i]]=1
-    '''
-    model=mintreeMFP(n,e,d)
-    model.hideOutput()
-    model.optimize()
-    maxFlow = model.getObjVal()
-    print "  ------minTreeMFP Optimal value: ",maxFlow
+        n={'Node0': [], 'Node1': []}
+        e={('Node0', 'Node1'): {'cost': '1.0', 'cap': '100000.0'}, ('Node1', 'Node0'): {'cost': '1.0', 'cap': '100000.0'}}
+        d={('Node0', 'Node1'): 1,}
+        lamb,routeList= caculatemaxConcurrentMFPRoute(n,e,d)
+        print(routeList)
+        model=mintreeMFP(n,e,d)
+        #model.hideOutput()
+        model.optimize()
+        maxFlow = model.getObjVal()
+    print ("  ------minTreeMFP Optimal value: ",maxFlow)
 
     for v in model.getVars():
         if model.getVal(v)>EPS:
@@ -710,15 +715,16 @@ if __name__ == "__main__":
             #print('edgeUsed({0},{1})={2}',format(i,j,z[i,j]))
     '''
         
-    fileName="/topologies/"+filename
-    lamb,routeList=caculatemaxConcurrentMFPRoute(fileName,consumerList,producerList)
+    fileName="topo-for-CompareMultiPath.txt"
+    lamb,routeList=caculatemaxConcurrentMFPRoutef(fileName,consumerList,producerList)
     print ("  --------maxConcurrentMFP variant lambda is:",lamb)
+    '''
     '''
     model=MaxMFP(n, e, d)
     model.hideOutput()
     model.optimize()
     maxFlow=model.getObjVal()
-    print "  --------MaxMFP Optimal value: ",maxFlow
+    print("  --------MaxMFP Optimal value: ",maxFlow)
     
     # show the flow detail if nodes is not too many
     if len(n)<50:
@@ -730,7 +736,7 @@ if __name__ == "__main__":
                     if(model.getVal(x[i,j,s,t])>EPS):
                         print('--------x[{0},{1},{2},{3}]={4}'.format(i,j,s,t,model.getVal(x[i,j,s,t])))
     '''
-    
+    '''
     maxThroughput,lamb,routeList=caculatenoCommLinkPairFirst(fileName, consumerList, producerList)
     print ("  --------NoCommLinkMultipathPairFirst lambda value: ",lamb)
     print ("  --------NoCommLinkMultipathPairFirst maxThroughput value: ",maxThroughput)
@@ -749,3 +755,4 @@ if __name__ == "__main__":
     maxThroughput,lamb,routeList=caculateKshortestwithRestore(fileName, consumerList, producerList,3)
     print ("  --------K-shortest with Restore -3 lambda value: ",lamb)
     print ("  --------K-shortest with Restore -3 maxThroughput value: ",maxThroughput)
+    '''

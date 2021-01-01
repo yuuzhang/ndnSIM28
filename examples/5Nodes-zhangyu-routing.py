@@ -41,7 +41,7 @@ parser.add_argument("--vis",action="store_true",default=False)
 
 args=parser.parse_args()
 
-manualAssign=False
+manualAssign=True
 
 # ----------------仿真拓扑----------------
 topoFileName="topo-for-CompareMultiPath.txt"
@@ -60,9 +60,9 @@ ndnHelper = ndn.StackHelper()
 # cs::Random Random
 # cs::Nocache Policy that completely disables caching
 #ndnHelper.SetOldContentStore("ns3::ndn::cs::Lru","MaxSize","100","","","","","","")
-ndnHelper.SetOldContentStore("ns3::ndn::cs::Nocache","","","","","","","","")
-ndnHelper.InstallAll();
-topologyReader.ApplyOspfMetric()
+#ndnHelper.SetOldContentStore("ns3::ndn::cs::Nocache","","","","","","","","")
+ndnHelper.InstallAll()
+#topologyReader.ApplyOspfMetric()
 ndnGlobalRoutingHelper = ndn.GlobalRoutingHelper()
 ndnGlobalRoutingHelper.InstallAll()
 
@@ -70,8 +70,8 @@ ndnGlobalRoutingHelper.InstallAll()
 consumerList=[]
 producerList=[]
 if(manualAssign):
-    consumerList=['Node0','Node1']
-    producerList=['Node3','Node4']
+    consumerList=['Node0']
+    producerList=['Node2']
 else:
     K=int(math.floor(int(nodes.GetN())/2.0))
     for k in range(K):
@@ -93,6 +93,7 @@ pHelper.SetAttribute("PayloadSize", StringValue("1024"));
 '''
 2017-10-17 ZhangYu 考虑到多播时的FIB，把prefix改为跟producerName相关，而不是consumerName
 '''
+'''
 for i in range(len(producerList)):
     #if i==7:
     cHelper.SetPrefix("/"+producerList[i])
@@ -103,7 +104,7 @@ for i in range(len(producerList)):
     pHelper.SetPrefix("/"+producerList[i])
     ndnGlobalRoutingHelper.AddOrigin("/"+producerList[i], topologyReader.FindNodeFromName(producerList[i]))
     pHelper.Install(topologyReader.FindNodeFromName(producerList[i]))
-
+'''
 # ----------------路由和转发----------------
 # Calculate and install FIBs
 if args.routingName=="Flooding":
